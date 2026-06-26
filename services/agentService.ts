@@ -25,7 +25,7 @@ export interface AgentTask {
   completedAt?: Date;
 }
 
-export type ToolName = 'calculate' | 'searchKnowledge' | 'navigateBrowser' | 'readScreen' | 'executeShell' | 'fillForm' | 'extractData' | 'clickByText' | 'scrollPage' | 'hoverElement' | 'waitForElement';
+export type ToolName = 'calculate' | 'searchKnowledge' | 'navigateBrowser' | 'readScreen' | 'executeShell' | 'fillForm' | 'extractData' | 'clickByText' | 'scrollPage' | 'hoverElement' | 'waitForElement' | 'readPage' | 'searchWeb' | 'extractPage';
 
 export interface Tool {
   name: ToolName;
@@ -336,6 +336,54 @@ class AgentService {
           return `Elemento encontrado: ${input}`;
         } catch (e) {
           return `Erro ao aguardar elemento: ${e}`;
+        }
+      }
+    });
+
+    this.registerTool({
+      name: 'readPage',
+      description: 'LÊ/resume o conteúdo de uma URL (markdown/texto). Firecrawl com fallback para navegador. Use para "ler/resumir" sites, sem interagir.',
+      execute: async (input: string) => {
+        try {
+          const { webClient } = await import('./webClient');
+          const url = input.startsWith('http') ? input : `https://${input}`;
+          const res = await webClient.read(url);
+          if (!res.ok) return `Erro ao ler página: ${res.message || res.error}`;
+          const content = res.markdown || res.text || '';
+          return `[fonte: ${res.source}] ${res.title || res.url}\n\n${content.slice(0, 4000)}`;
+        } catch (e) {
+          return `Erro ao ler página: ${e}`;
+        }
+      }
+    });
+
+    this.registerTool({
+      name: 'searchWeb',
+      description: 'Pesquisa na web (Firecrawl) e retorna lista de resultados {título, url, trecho}.',
+      execute: async (input: string) => {
+        try {
+          const { webClient } = await import('./webClient');
+          const res = await webClient.search(input);
+          if (!res.ok) return `Erro na pesquisa: ${res.message || res.error}`;
+          return (res.results || []).map((r, i) => `${i + 1}. ${r.title} — ${r.url}\n${r.snippet}`).join('\n\n') || 'Sem resultados.';
+        } catch (e) {
+          return `Erro na pesquisa: ${e}`;
+        }
+      }
+    });
+
+    this.registerTool({
+      name: 'extractPage',
+      description: 'Extrai dados estruturados de uma URL via Firecrawl. Input: a URL (opcionalmente descreva os campos).',
+      execute: async (input: string) => {
+        try {
+          const { webClient } = await import('./webClient');
+          const url = input.startsWith('http') ? input : `https://${input}`;
+          const res = await webClient.extract(url);
+          if (!res.ok) return `Erro ao extrair: ${res.message || res.error}`;
+          return `Dados extraídos (${res.source}): ${JSON.stringify(res.data)}`;
+        } catch (e) {
+          return `Erro ao extrair: ${e}`;
         }
       }
     });

@@ -528,6 +528,44 @@ const updateUserPreferencesFunctionDeclaration: FunctionDeclaration = {
   }
 };
 
+const readPageFunctionDeclaration: FunctionDeclaration = {
+  name: 'ler_pagina',
+  description: 'LÊ/resume o conteúdo de uma página web (texto limpo em markdown). Use quando o usuário pedir para "ler", "resumir" ou "ver o que tem" em um site/URL. NÃO interage com a página — apenas extrai o conteúdo. Usa Firecrawl com fallback automático para navegador.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      url: { type: Type.STRING, description: 'A URL completa da página a ser lida (https://...).' }
+    },
+    required: ['url']
+  }
+};
+
+const searchWebFunctionDeclaration: FunctionDeclaration = {
+  name: 'pesquisar',
+  description: 'Pesquisa na web por uma consulta e retorna uma lista de resultados (título, URL, trecho). Use quando o usuário quiser encontrar sites/fontes sobre um assunto.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      query: { type: Type.STRING, description: 'O termo/pergunta de pesquisa.' },
+      limit: { type: Type.NUMBER, description: 'Número máximo de resultados (padrão 5).' }
+    },
+    required: ['query']
+  }
+};
+
+const extractPageFunctionDeclaration: FunctionDeclaration = {
+  name: 'extrair',
+  description: 'Extrai dados ESTRUTURADOS de uma página web (ex.: preços, tabelas, campos específicos). Use quando o usuário pedir dados específicos de um site.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      url: { type: Type.STRING, description: 'A URL da página de onde extrair dados.' },
+      campos: { type: Type.STRING, description: 'Descrição em linguagem natural dos campos/dados desejados.' }
+    },
+    required: ['url']
+  }
+};
+
 function executeGetCurrentDateTimeBrazil(): string {
   const now = new Date();
   return now.toLocaleString('pt-BR', { 
@@ -556,6 +594,9 @@ export const baseSystemInstruction = `
     2. **Visão e OCR**: Se o usuário enviar uma imagem ou compartilhar a tela, analise-a detalhadamente. Você pode extrair texto (OCR) e descrever elementos visuais (Vision).
     3. **Capacidade Computacional**: Use a ferramenta 'calculate' para qualquer cálculo matemático que não seja trivial, garantindo precisão absoluta.
     4. **Navegação e RPA (Headless)**: Você pode navegar na web e executar funções via 'openBrowser' e 'generateAndRunRpa'. Isso permite automação de tarefas repetitivas ou busca de informações em sites específicos.
+       - **LER vs AGIR (escolha a ferramenta certa)**:
+         - Para LER/RESUMIR/EXTRAIR conteúdo de um site (sem interagir): use 'ler_pagina(url)' (lê markdown limpo, Firecrawl com fallback para navegador), 'pesquisar(query)' (busca fontes na web) e 'extrair(url, campos)' (dados estruturados). Prefira essas ferramentas quando o usuário disser "leia", "resuma", "o que tem no site X", "pesquise sobre Y".
+         - Para AGIR (preencher campo, clicar, digitar, navegar em sistemas): use as ferramentas de RPA ('generateAndRunRpa', 'interactWithBrowser', 'inspectBrowserPage'). Use quando o usuário disser "preencha", "clique", "digite", "faça login".
        - **ECONOMIA E PRECISÃO**: Para interagir com o sistema interno, prefira SEMPRE as ferramentas 'inspectBrowserPage' e 'interactWithBrowser' em vez de pedir compartilhamento de tela ao vivo. Isso é mais barato e preciso.
        - Se o usuário pedir para fazer algo no sistema, use 'inspectBrowserPage' para ver onde você está e o que pode clicar.
        - Use 'getSystemFlows' para saber o passo-a-passo de processos complexos (como cadastros).
@@ -754,11 +795,13 @@ export const sendTextMessage = async (
     const focoFlowKeywords = ['tarefa', 'projeto', 'lembrete', 'transação', 'finança', 'link', 'focoflow', 'foco flow', 'balanço', 'relatório', 'gasto', 'receita', 'pix', 'pagamento', 'saldo', 'dinheiro', 'custo', 'valor', 'comprei', 'vendi', 'paguei', 'recebi', 'ganhei', 'perdi', 'investi', 'economizei', 'poupança', 'banco', 'cartão', 'crédito', 'débito', 'extrato', 'movimentação'];
     const systemKeywords = ['câmera', 'tela', 'agente', 'especialista', 'alarme', 'preferência', 'nome', 'ajuda', 'suporte', 'configuração', 'tema', 'cor', 'lembra', 'conversamos', 'disse', 'falamos', 'passado', 'memória', 'histórico'];
     
+    const webKeywords = ['leia', 'ler', 'resuma', 'resumir', 'resumo', 'extrair', 'extraia', 'site', 'página', 'pagina', 'url', 'link', 'acessa o site', 'abra o site'];
     const lowerMessage = message.toLowerCase();
     // Use a more inclusive check or just always enable for default agent
-    const needsFunctions = agent === 'default' || 
-                           focoFlowKeywords.some(kw => lowerMessage.includes(kw)) || 
-                           systemKeywords.some(kw => lowerMessage.includes(kw));
+    const needsFunctions = agent === 'default' ||
+                           focoFlowKeywords.some(kw => lowerMessage.includes(kw)) ||
+                           systemKeywords.some(kw => lowerMessage.includes(kw)) ||
+                           webKeywords.some(kw => lowerMessage.includes(kw));
     
     // Search keywords: things that likely need real-time web info
     const searchKeywords = ['preço', 'cotação', 'notícia', 'clima', 'tempo', 'quem é', 'o que é', 'onde fica', 'como está', 'resultado', 'hoje', 'agora', 'atual', 'bitcoin', 'dólar', 'euro', 'bolsa', 'quem ganhou', 'quem venceu', 'placar', 'jogo', 'filme', 'série', 'elenco', 'busque', 'pesquise', 'procurar', 'search', 'google', 'internet', 'tempo real'];
@@ -790,7 +833,10 @@ export const sendTextMessage = async (
         getSystemFlowsFunctionDeclaration,
         scrollPageFunctionDeclaration,
         hoverElementFunctionDeclaration,
-        waitForElementFunctionDeclaration
+        waitForElementFunctionDeclaration,
+        readPageFunctionDeclaration,
+        searchWebFunctionDeclaration,
+        extractPageFunctionDeclaration
     ];
 
     if (integrations?.openClaw?.enabled) functionDeclarations.push(callOpenClawFunctionDeclaration);

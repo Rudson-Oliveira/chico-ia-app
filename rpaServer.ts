@@ -110,6 +110,27 @@ async function screenshotBase64(page: AnyPage, fullPage = false): Promise<string
   return buf.toString('base64');
 }
 
+// Fallback de LEITURA reutilizando a sessao Playwright: navega e retorna o
+// innerText da pagina. Usado por /api/web/read quando o Firecrawl falha ou
+// nao ha chave configurada. Nunca derruba o servidor — degrada com {ok:false}.
+export async function readPageText(
+  visitorId: string,
+  url: string,
+): Promise<{ ok: boolean; text?: string; title?: string; url?: string; error?: string }> {
+  if (!isHttpUrl(url)) return { ok: false, error: 'URL http/https inválida' };
+  const available = await ensurePlaywright();
+  if (!available) return { ok: false, error: playwrightError || 'playwright_unavailable' };
+  try {
+    const { page } = await getSession(visitorId);
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT_MS });
+    const text: string = await page.evaluate(() => (document.body?.innerText || '').trim());
+    const title: string = await page.title();
+    return { ok: true, text, title, url: page.url() };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'read failed' };
+  }
+}
+
 export function mountRpaRoutes(app: Express) {
   const router = express.Router();
   router.use(express.json({ limit: '2mb' }));

@@ -468,6 +468,42 @@ export const App: React.FC<AppProps> = ({ user, initialUserData, onApplyTheme })
     }
   };
 
+  const handleWebCommand = async (command: string, args: any) => {
+    try {
+      const { webClient } = await import('./services/webClient');
+      if (command === 'ler_pagina') {
+        const url = String(args?.url || '').trim();
+        if (!url) return { success: false, message: 'URL não informada.' };
+        const res = await webClient.read(url.startsWith('http') ? url : `https://${url}`);
+        if (!res.ok) return { success: false, message: res.message || res.error || 'Falha ao ler a página.' };
+        const content = res.markdown || res.text || '';
+        return {
+          success: true,
+          source: res.source,
+          message: `Conteúdo de ${res.title || res.url || url} (via ${res.source}):\n\n${content.slice(0, 6000)}`,
+        };
+      }
+      if (command === 'pesquisar') {
+        const res = await webClient.search(String(args?.query || ''), args?.limit);
+        if (!res.ok) return { success: false, message: res.message || res.error || 'Falha na pesquisa.' };
+        const list = (res.results || [])
+          .map((r, i) => `${i + 1}. ${r.title}\n${r.url}\n${r.snippet}`)
+          .join('\n\n');
+        return { success: true, source: res.source, message: list || 'Nenhum resultado encontrado.' };
+      }
+      if (command === 'extrair') {
+        const url = String(args?.url || '').trim();
+        const res = await webClient.extract(url.startsWith('http') ? url : `https://${url}`, undefined, args?.campos);
+        if (!res.ok) return { success: false, message: res.message || res.error || 'Falha na extração.' };
+        return { success: true, source: res.source, message: `Dados extraídos de ${res.title || url}:\n\n${JSON.stringify(res.data, null, 2)}` };
+      }
+      return { success: false, message: 'Comando web desconhecido.' };
+    } catch (err: any) {
+      console.error('Web Command Error:', err);
+      return { success: false, message: err?.message || 'Erro ao executar comando web.' };
+    }
+  };
+
   const handleFocoFlowCommand = async (command: string, args: any) => {
     try {
         switch (command) {
@@ -2480,6 +2516,9 @@ export const App: React.FC<AppProps> = ({ user, initialUserData, onApplyTheme })
                   } else if (fc.name === 'openBrowser' || fc.name === 'closeBrowser' || fc.name === 'runRpaWorkflow' || fc.name === 'generateAndRunRpa') {
                       const res = await handleRpaCommand(fc.name, fc.args);
                       addMessage('system', res.message || res.error || "Ação RPA concluída.");
+                  } else if (fc.name === 'ler_pagina' || fc.name === 'pesquisar' || fc.name === 'extrair') {
+                      const res = await handleWebCommand(fc.name, fc.args);
+                      addMessage('system', res.message || 'Ação web concluída.');
                   } else if (fc.name === 'calculate') {
                       const res = await handleCalculateCommand((fc.args as any).expression);
                       addMessage('system', `Resultado do cálculo: ${res.result || res.error}`);

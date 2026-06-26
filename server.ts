@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
 import { mountRpaRoutes } from './rpaServer';
+import { mountWebRoutes } from './firecrawlServer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,6 +17,9 @@ async function startServer() {
 
   // RPA server-side (Playwright headless). Degrada com 503 se indisponivel.
   mountRpaRoutes(app);
+
+  // Leitura/pesquisa/extracao (Firecrawl -> fallback Playwright).
+  mountWebRoutes(app);
 
   // Dynamic Proxy with Header Stripping and Cookie Support
   app.use('/proxy', (req, res, next) => {
