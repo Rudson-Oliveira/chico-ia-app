@@ -4,6 +4,7 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
+import { mountRpaRoutes } from './rpaServer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,6 +13,9 @@ async function startServer() {
   const app = express();
   // Porta via env (publicacao usa 8000). Sem porta fixa em codigo.
   const PORT = Number(process.env.PORT) || 8000;
+
+  // RPA server-side (Playwright headless). Degrada com 503 se indisponivel.
+  mountRpaRoutes(app);
 
   // Dynamic Proxy with Header Stripping and Cookie Support
   app.use('/proxy', (req, res, next) => {
@@ -56,7 +60,8 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     app.use(express.static(path.join(__dirname, 'dist')));
-    app.get('*', (req, res) => {
+    // SPA fallback compativel com Express 5: middleware no fim da cadeia.
+    app.use((req, res) => {
       res.sendFile(path.join(__dirname, 'dist', 'index.html'));
     });
   }

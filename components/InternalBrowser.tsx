@@ -1,9 +1,15 @@
 // Force reload v2
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { registerRpaIframe } from '../services/rpaService';
+import { registerRpaIframe, setServerSideMode } from '../services/rpaService';
 import { agentService } from '../services/agentService';
 import { visionService } from '../services/visionService';
+import { rpaClient } from '../services/rpaClient';
 import { ConversationMessage } from '../types';
+import { getProxyBase } from '../proxyBase';
+
+// Viewport do Chromium server-side (deve casar com VIEWPORT em rpaServer.ts).
+const RPA_VIEWPORT = { width: 1280, height: 800 };
+type RpaMode = 'checking' | 'server' | 'iframe' | 'unavailable';
 
 interface InternalBrowserProps {
   isOpen: boolean;
@@ -35,9 +41,15 @@ const InternalBrowser = ({
   const [chatInput, setChatInput] = useState('');
   const [isInteractionMode, setIsInteractionMode] = useState(false);
   const [clicks, setClicks] = useState<{x: number, y: number, id: number}[]>([]);
+  // Modo server-side (Playwright) x iframe local.
+  const [rpaMode, setRpaMode] = useState<RpaMode>('checking');
+  const [shot, setShot] = useState<string>('');
+  const [serverBusy, setServerBusy] = useState(false);
+  const [serverError, setServerError] = useState<string>('');
   const internalIframeRef = useRef<HTMLIFrameElement>(null);
   const canvasOverlayRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // ResizeObserver to sync canvas with container
@@ -76,7 +88,93 @@ const InternalBrowser = ({
       registerRpaIframe(internalIframeRef.current);
       agentService.setIframeRef(internalIframeRef.current);
     }
+  }, [isOpen, rpaMode]);
+
+  // Detecta disponibilidade do RPA server-side ao abrir.
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    setRpaMode('checking');
+    (async () => {
+      const available = await rpaClient.isAvailable(true);
+      if (cancelled) return;
+      if (available) {
+        setServerSideMode(true);
+        setRpaMode('server');
+        // Navega para a URL inicial no browser server-side.
+        await runServerNavigate(url);
+      } else {
+        setServerSideMode(false);
+        // Sem Playwright: local usa iframe; publicado mostra aviso.
+        setRpaMode(getProxyBase() ? 'unavailable' : 'iframe');
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
+
+  // Polling do screenshot enquanto em modo server e aberto.
+  useEffect(() => {
+    if (rpaMode !== 'server' || !isOpen) return;
+    const t = setInterval(async () => {
+      if (serverBusy) return;
+      const res = await rpaClient.screenshot();
+      if (res.ok && res.screenshot) setShot(res.screenshot);
+    }, 2000);
+    return () => clearInterval(t);
+  }, [rpaMode, isOpen, serverBusy]);
+
+  const applyResult = (res: { ok: boolean; screenshot?: string; url?: string; error?: string; message?: string }) => {
+    if (res.ok && res.screenshot) setShot(res.screenshot);
+    if (res.url) setInputUrl(res.url);
+    setServerError(res.ok ? '' : (res.message || res.error || 'Erro na automação.'));
+    if (!res.ok && res.message) setRpaMode(getProxyBase() ? 'unavailable' : 'iframe');
+  };
+
+  const runServerNavigate = async (target: string) => {
+    setServerBusy(true);
+    try {
+      const res = await rpaClient.navigate(target);
+      applyResult(res);
+    } finally {
+      setServerBusy(false);
+    }
+  };
+
+  // Converte coordenadas do clique na imagem para o viewport do Chromium.
+  const handleImageClick = async (e: React.MouseEvent<HTMLImageElement>) => {
+    const img = imgRef.current;
+    if (!img) return;
+    const rect = img.getBoundingClientRect();
+    const sx = RPA_VIEWPORT.width / rect.width;
+    const sy = RPA_VIEWPORT.height / rect.height;
+    const x = Math.round((e.clientX - rect.left) * sx);
+    const y = Math.round((e.clientY - rect.top) * sy);
+    setServerBusy(true);
+    try {
+      applyResult(await rpaClient.clickAt(x, y));
+    } finally {
+      setServerBusy(false);
+    }
+  };
+
+  // Encaminha digitação do usuário (com foco na imagem) para o foco atual do Chromium.
+  const handleImageKeyDown = async (e: React.KeyboardEvent) => {
+    if (rpaMode !== 'server') return;
+    const special: Record<string, string> = {
+      Enter: 'Enter', Backspace: 'Backspace', Tab: 'Tab', Escape: 'Escape',
+      ArrowUp: 'ArrowUp', ArrowDown: 'ArrowDown', ArrowLeft: 'ArrowLeft', ArrowRight: 'ArrowRight', Delete: 'Delete',
+    };
+    if (e.key in special) {
+      e.preventDefault();
+      setServerBusy(true);
+      try { applyResult(await rpaClient.pressKey(special[e.key])); } finally { setServerBusy(false); }
+    } else if (e.key.length === 1) {
+      e.preventDefault();
+      setServerBusy(true);
+      try { applyResult(await rpaClient.type(e.key)); } finally { setServerBusy(false); }
+    }
+  };
 
   // Handle drawing on canvas from agent/rpa
   useEffect(() => {
@@ -138,10 +236,13 @@ const InternalBrowser = ({
     }
     setUrl(targetUrl);
     setInputUrl(targetUrl);
+    if (rpaMode === 'server') void runServerNavigate(targetUrl);
   };
 
   const refresh = () => {
-    if (internalIframeRef.current) {
+    if (rpaMode === 'server') {
+      void runServerNavigate(url);
+    } else if (internalIframeRef.current) {
       internalIframeRef.current.src = url;
     }
   };
@@ -153,6 +254,7 @@ const InternalBrowser = ({
       : 'https://hospitalarsaude.app.br/#/dashboard/home';
     setUrl(newUrl);
     setInputUrl(newUrl);
+    if (rpaMode === 'server') void runServerNavigate(newUrl);
   };
 
   const handleChatSubmit = (e: React.FormEvent) => {
@@ -178,9 +280,7 @@ const InternalBrowser = ({
   };
 
   const getProxyUrl = (targetUrl: string) => {
-    // Em dev (mesma origem) usa /proxy; publicado, o deploy reescreve __PORT_8000__ para port/8000.
-    const base = '__PORT_8000__'.startsWith('__') ? '' : '__PORT_8000__';
-    return `${base}/proxy?url=${encodeURIComponent(targetUrl)}`;
+    return `${getProxyBase()}/proxy?url=${encodeURIComponent(targetUrl)}`;
   };
 
   if (!isOpen) return null;
@@ -328,23 +428,69 @@ const InternalBrowser = ({
           </div>
         </div>
 
-        {/* Main Iframe Area */}
+        {/* Main Content Area */}
         <div ref={containerRef} className="flex-1 bg-white relative">
-          <iframe 
-            ref={internalIframeRef}
-            src={getProxyUrl(url)} 
-            className="w-full h-full border-none"
-            title="Internal Browser Content"
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-pointer-lock allow-presentation"
-          />
-          
+          {rpaMode === 'checking' && (
+            <div className="absolute inset-0 flex items-center justify-center bg-[#1a1a1a] text-gray-400 z-10">
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-8 h-8 border-2 border-[#00B7FF] border-t-transparent rounded-full animate-spin"></div>
+                <span className="text-xs uppercase tracking-widest">Inicializando navegador...</span>
+              </div>
+            </div>
+          )}
+
+          {rpaMode === 'unavailable' && (
+            <div className="absolute inset-0 flex items-center justify-center bg-[#1a1a1a] text-gray-300 z-10 p-8">
+              <div className="max-w-md text-center flex flex-col items-center gap-4">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-[#FF9800]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <h3 className="text-base font-bold text-gray-100">Automação de navegador indisponível</h3>
+                <p className="text-sm text-gray-400">A automação de navegador (RPA) está disponível apenas no modo local/desktop. O chat, voz, câmera e compartilhamento de tela continuam funcionando normalmente.</p>
+              </div>
+            </div>
+          )}
+
+          {rpaMode === 'server' && (
+            <img
+              ref={imgRef}
+              src={shot ? `data:image/png;base64,${shot}` : undefined}
+              alt="Navegador (server-side)"
+              tabIndex={0}
+              onClick={handleImageClick}
+              onKeyDown={handleImageKeyDown}
+              onWheel={(e) => { void rpaClient.scroll(e.deltaY).then(applyResult); }}
+              className="w-full h-full object-contain bg-white cursor-pointer outline-none select-none"
+              draggable={false}
+            />
+          )}
+
+          {rpaMode === 'iframe' && (
+            <iframe
+              ref={internalIframeRef}
+              src={getProxyUrl(url)}
+              className="w-full h-full border-none"
+              title="Internal Browser Content"
+              sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-pointer-lock allow-presentation"
+            />
+          )}
+
+          {rpaMode === 'server' && serverBusy && (
+            <div className="absolute top-2 right-2 z-30 bg-black/60 text-white text-[10px] px-2 py-1 rounded-full flex items-center gap-1">
+              <div className="w-2 h-2 bg-[#00B7FF] rounded-full animate-ping"></div> processando
+            </div>
+          )}
+          {rpaMode === 'server' && serverError && (
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 bg-red-600/80 text-white text-[10px] px-3 py-1 rounded-full">
+              {serverError}
+            </div>
+          )}
+
           <canvas 
             ref={canvasOverlayRef}
             className="absolute inset-0 pointer-events-none z-20"
           />
 
-          {/* Interaction Overlay */}
-          {isInteractionMode && (
+          {/* Interaction Overlay (apenas no modo iframe local) */}
+          {isInteractionMode && rpaMode === 'iframe' && (
             <div 
               className="absolute inset-0 z-30 cursor-crosshair bg-white/5 active:bg-white/10 transition-colors"
               onMouseDown={(e) => {

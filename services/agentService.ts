@@ -99,8 +99,14 @@ class AgentService {
       description: 'Navega para uma URL no browser interno',
       execute: async (input: string) => {
         try {
-          if (!this.iframeRef) return 'Browser interno não disponível.';
           const url = input.startsWith('http') ? input : `https://${input}`;
+          const { isServerSideMode } = await import('./rpaService');
+          if (isServerSideMode()) {
+            const { rpaClient } = await import('./rpaClient');
+            const res = await rpaClient.navigate(url);
+            return res.ok ? `Navegando para: ${url}` : `Erro ao navegar: ${res.error || res.message}`;
+          }
+          if (!this.iframeRef) return 'Browser interno não disponível.';
           this.iframeRef.src = url;
           await new Promise(r => setTimeout(r, 2000));
           return `Navegando para: ${url}`;
@@ -117,6 +123,18 @@ class AgentService {
         try {
           let text = '';
           let domSummary = '';
+          const { isServerSideMode } = await import('./rpaService');
+          if (isServerSideMode()) {
+            const { rpaClient } = await import('./rpaClient');
+            const dom = await rpaClient.dom();
+            if (dom.ok) {
+              const labels = (dom.elements || [])
+                .map(e => e.text || e.label || e.placeholder)
+                .filter(Boolean)
+                .slice(0, 30);
+              return `Página (server-side): ${dom.title || ''} — URL: ${dom.url}\nElementos interativos: ${labels.join(', ')}`;
+            }
+          }
           if (this.iframeRef) {
             try {
               const doc = this.iframeRef.contentDocument || this.iframeRef.contentWindow?.document;
@@ -154,6 +172,21 @@ class AgentService {
       description: 'Clica em um elemento que contém o texto especificado',
       execute: async (input: string) => {
         try {
+          const { isServerSideMode } = await import('./rpaService');
+          if (isServerSideMode()) {
+            const { rpaClient } = await import('./rpaClient');
+            const dom = await rpaClient.dom();
+            if (!dom.ok) return `Erro ao ler página: ${dom.error}`;
+            const target = (dom.elements || []).find(e =>
+              (e.text || '').toLowerCase().includes(input.toLowerCase()) ||
+              (e.label || '').toLowerCase().includes(input.toLowerCase())
+            );
+            if (!target) return `Elemento com texto "${input}" não encontrado.`;
+            const cx = target.rect.x + target.rect.width / 2;
+            const cy = target.rect.y + target.rect.height / 2;
+            const res = await rpaClient.clickAt(Math.round(cx), Math.round(cy));
+            return res.ok ? `Clicado em: "${input}"` : `Erro ao clicar: ${res.error}`;
+          }
           if (!this.iframeRef) return 'Browser não disponível.';
           const doc = this.iframeRef.contentDocument || this.iframeRef.contentWindow?.document;
           if (!doc) return 'Documento não acessível.';

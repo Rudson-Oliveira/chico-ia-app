@@ -18,7 +18,9 @@ let storage: any;
 try {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
-    db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+    // Usa o banco padrao quando o id e "(default)" ou vazio; senao, o banco nomeado.
+    const dbId = firebaseConfig.firestoreDatabaseId;
+    db = (!dbId || dbId === '(default)') ? getFirestore(app) : getFirestore(app, dbId);
     storage = getStorage(app);
 } catch (error) {
     console.error("Firebase initialization failed:", error);

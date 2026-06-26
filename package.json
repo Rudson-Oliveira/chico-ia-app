@@ -21,6 +21,7 @@
     "lucide-react": "^1.7.0",
     "mathjs": "^15.1.1",
     "motion": "^12.38.0",
+    "playwright": "^1.61.1",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "recharts": "^3.8.0",
