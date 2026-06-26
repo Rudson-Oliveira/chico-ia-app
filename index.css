@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+:root {
+  /* Default Modern Dark Theme (Neutral Slate Base) */
+  --bg-primary: #0f172a;   /* Slate 900 - Main Background */
+  --bg-secondary: #1e293b; /* Slate 800 - Sidebar/Cards */
+  --bg-tertiary: #334155;  /* Slate 700 - Inputs/Hover */
+  --text-primary: #f8fafc; /* Slate 50 - Main Text */
+  --text-secondary: #94a3b8; /* Slate 400 - Secondary Text */
+  --accent-primary: #3b82f6; /* Blue 500 - Default Accent */
+  --accent-primary-hover: #2563eb; /* Blue 600 */
+  --accent-primary-text: #ffffff;
+  --border-color: #334155; /* Slate 700 */
+  --destructive-color: #ef4444;
+  --success-color: #22c55e;
+}
+
+.theme-light {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f1f5f9; /* Slate 100 */
+  --bg-tertiary: #e2e8f0;  /* Slate 200 */
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --accent-primary: #3b82f6;
+  --accent-primary-hover: #2563eb;
+  --accent-primary-text: #ffffff;
+  --border-color: #e2e8f0;
+  --destructive-color: #ef4444;
+  --success-color: #22c55e;
+}
+
+html, body {
+  min-height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overscroll-behavior: none;
+}
+
+#root {
+  min-height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease;
+}
+
+/* Custom style for color input */
+input[type="color"] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  width: 44px;
+  height: 44px;
+  border: none;
+  cursor: pointer;
+  background-color: transparent;
+  border-radius: 50%;
+  padding: 0;
+  border: 2px solid var(--border-color);
+  transition: border-color 0.3s ease;
+}
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 2px;
+  border-radius: 50%;
+}
+input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+input[type="color"]::-moz-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+
+@keyframes pulse-red {
+  0% { background-color: rgba(239, 68, 68, 0.4); }
+  50% { background-color: rgba(239, 68, 68, 0.7); }
+  100% { background-color: rgba(239, 68, 68, 0.4); }
+}
+
+.animate-pulse-red {
+  animation: pulse-red 2s infinite;
+}
+
+@keyframes pulse-bell-animation {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 82, 82, 0.7); }
+  70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(255, 82, 82, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 82, 82, 0); }
+}
+
+@keyframes alarm-shake-animation {
+  0% { transform: translate(1px, 1px) rotate(0deg); }
+  10% { transform: translate(-1px, -1px) rotate(-0.5deg); }
+  20% { transform: translate(-1px, 0px) rotate(0.5deg); }
+  30% { transform: translate(1px, 1px) rotate(0deg); }
+  40% { transform: translate(1px, -1px) rotate(0.5deg); }
+  50% { transform: translate(-1px, 1px) rotate(-0.5deg); }
+  60% { transform: translate(-1px, 1px) rotate(0deg); }
+  70% { transform: translate(1px, 1px) rotate(-0.5deg); }
+  80% { transform: translate(-1px, -1px) rotate(0.5deg); }
+  90% { transform: translate(1px, 1px) rotate(0deg); }
+  100% { transform: translate(1px, -1px) rotate(-0.5deg); }
+}
+
+.pulse-bell {
+  animation: pulse-bell-animation 2s infinite;
+}
+
+.animate-shake {
+  animation: alarm-shake-animation 0.5s infinite;
+}

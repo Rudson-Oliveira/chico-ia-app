@@ -1,0 +1,245 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      // Hardcoded admin email for bootstrap + check for verified email
+      return isEmailVerified() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+        request.auth.token.email == "rud.pa2323@gmail.com"
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidUrl(url) {
+      return url is string && (url.matches("^https://.*") || url.matches("^http://.*")) && url.size() < 2000;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // ===============================================================
+    // Validation Blueprints
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.uid is string && data.uid == request.auth.uid &&
+             data.email is string && data.email.size() < 256 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             (!('role' in data) || data.role in ['admin', 'user']) &&
+             (!('subscriptionStatus' in data) || data.subscriptionStatus in ['pending', 'active', 'inactive', 'canceled']) &&
+             (!('profilePicUrl' in data) || isValidUrl(data.profilePicUrl)) &&
+             (!('theme' in data) || (data.theme is string && data.theme.size() < 50)) &&
+             (!('customThemeColor' in data) || (data.customThemeColor is string && data.customThemeColor.size() < 20)) &&
+             (!('voiceName' in data) || (data.voiceName is string && data.voiceName.size() < 50)) &&
+             (!('textToSpeechEnabled' in data) || data.textToSpeechEnabled is bool) &&
+             (!('usingOwnKey' in data) || data.usingOwnKey is bool) &&
+             (!('allowedIP' in data) || (data.allowedIP is string && data.allowedIP.size() < 50)) &&
+             (!('termsAccepted' in data) || data.termsAccepted is bool) &&
+             (!('termsAcceptedAt' in data) || data.termsAcceptedAt is timestamp) &&
+             (!('programmingLevel' in data) || data.programmingLevel in ['basic', 'intermediate', 'advanced']) &&
+             (!('chicoCustomName' in data) || (data.chicoCustomName is string && data.chicoCustomName.size() < 100)) &&
+             (!('userPreferredName' in data) || (data.userPreferredName is string && data.userPreferredName.size() < 100)) &&
+             (!('socialLinks' in data) || data.socialLinks is map) &&
+             (!('integrations' in data) || data.integrations is map) &&
+             (!('usage' in data) || data.usage is map);
+    }
+
+    function isValidConversation(data) {
+      return data.uid is string && data.uid == request.auth.uid &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             (!('isArchived' in data) || data.isArchived is bool);
+    }
+
+    function isValidMessage(data) {
+      return data.role in ['user', 'model', 'system'] &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 20000 &&
+             (!('summary' in data) || (data.summary is string && data.summary.size() < 5000)) &&
+             (!('imageUrl' in data) || isValidUrl(data.imageUrl)) &&
+             (!('fileName' in data) || (data.fileName is string && data.fileName.size() < 256)) &&
+             (!('blockType' in data) || data.blockType in ['code', 'text', 'prompt']) &&
+             (!('uid' in data) || (data.uid is string && data.uid == request.auth.uid));
+    }
+
+    function isValidFocoFlowItem(data) {
+      return data.user_id is string && data.user_id == request.auth.uid &&
+             data.category in ['task', 'project', 'reminder', 'link'] &&
+             (!('title' in data) || (data.title is string && data.title.size() < 500)) &&
+             (!('description' in data) || (data.description is string && data.description.size() < 5000)) &&
+             (!('status' in data) || data.status in ['todo', 'in_progress', 'done']) &&
+             (!('priority' in data) || data.priority in ['low', 'medium', 'high']) &&
+             (!('project_id' in data) || (data.project_id is string && data.project_id.size() < 128)) &&
+             (!('name' in data) || (data.name is string && data.name.size() < 200)) &&
+             (!('color' in data) || (data.color is string && data.color.size() < 20)) &&
+             (!('reminderTime' in data) || data.reminderTime is number) &&
+             (!('url' in data) || isValidUrl(data.url)) &&
+             (!('dismissed' in data) || data.dismissed is bool) &&
+             (!('completed' in data) || data.completed is bool);
+    }
+
+    function isValidFocoFlowTransaction(data) {
+      return data.user_id is string && data.user_id == request.auth.uid &&
+             data.amount is number &&
+             data.type in ['income', 'expense'] &&
+             data.date is number &&
+             (!('description' in data) || (data.description is string && data.description.size() < 1000)) &&
+             (!('category' in data) || (data.category is string && data.category.size() < 100)) &&
+             (!('origin_type' in data) || (data.origin_type is string && data.origin_type.size() < 100)) &&
+             (!('paymentMethod' in data) || (data.paymentMethod is string && data.paymentMethod.size() < 50)) &&
+             (!('sourceAccount' in data) || (data.sourceAccount is string && data.sourceAccount.size() < 100)) &&
+             (!('destinationAccount' in data) || (data.destinationAccount is string && data.destinationAccount.size() < 100)) &&
+             (!('relatedPerson' in data) || (data.relatedPerson is string && data.relatedPerson.size() < 100)) &&
+             (!('observations' in data) || (data.observations is string && data.observations.size() < 2000)) &&
+             (!('impactsEquity' in data) || data.impactsEquity is bool) &&
+             (!('status' in data) || data.status in ['pending', 'completed']);
+    }
+
+    function isValidBugReport(data) {
+      return data.uid is string && data.uid == request.auth.uid &&
+             data.description is string && data.description.size() > 0 && data.description.size() < 5000 &&
+             (!('userName' in data) || (data.userName is string && data.userName.size() < 100)) &&
+             (!('userEmail' in data) || (data.userEmail is string)) &&
+             (!('whatsapp' in data) || (data.whatsapp is string && data.whatsapp.size() < 30)) &&
+             (!('screenshotUrl' in data) || isValidUrl(data.screenshotUrl)) &&
+             (!('status' in data) || data.status in ['open', 'resolved']);
+    }
+
+    function isValidCustomAgent(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.description is string && data.description.size() < 500 &&
+             data.systemInstruction is string && data.systemInstruction.size() > 0 && data.systemInstruction.size() < 10000;
+    }
+
+    function isValidWorkflow(data) {
+      return data.uid is string && data.uid == request.auth.uid &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 200 &&
+             (!('description' in data) || (data.description is string && data.description.size() < 1000)) &&
+             data.steps is list && data.steps.size() <= 100 &&
+             data.status in ['idle', 'running', 'completed', 'error', 'paused'];
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    match /test/{docId} {
+      allow read: if isSignedIn(); // Restricted for health checks
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid) && isValidUser(incoming()) && 
+                    (!('role' in incoming()) || incoming().role == 'user');
+      allow update: if (isOwner(uid) && isValidUser(incoming()) && 
+                       incoming().role == existing().role &&
+                       incoming().uid == existing().uid) || isAdmin();
+      allow delete: if isAdmin();
+      
+      match /generatedImages/{imageId} {
+        allow read, write: if isOwner(uid) || isAdmin();
+      }
+      
+      match /custom_agents/{agentId} {
+        allow read: if isOwner(uid) || isAdmin();
+        allow create: if isOwner(uid) && isValidCustomAgent(incoming());
+        allow update: if isOwner(uid) && isValidCustomAgent(incoming());
+        allow delete: if isOwner(uid) || isAdmin();
+      }
+    }
+
+    match /focuflow_items/{itemId} {
+      allow list: if isSignedIn() && resource.data.user_id == request.auth.uid;
+      allow get: if isSignedIn() && (resource.data.user_id == request.auth.uid || isAdmin());
+      allow create: if isEmailVerified() && isValidFocoFlowItem(incoming());
+      allow update: if isEmailVerified() && isValidFocoFlowItem(incoming()) && (existing().user_id == request.auth.uid || isAdmin());
+      allow delete: if isAdmin() || (isSignedIn() && existing().user_id == request.auth.uid);
+    }
+
+    match /focuflow_financial_transactions/{transactionId} {
+      allow list: if isSignedIn() && resource.data.user_id == request.auth.uid;
+      allow get: if isSignedIn() && (resource.data.user_id == request.auth.uid || isAdmin());
+      allow create: if isEmailVerified() && isValidFocoFlowTransaction(incoming());
+      allow update: if isEmailVerified() && isValidFocoFlowTransaction(incoming()) && (existing().user_id == request.auth.uid || isAdmin());
+      allow delete: if isAdmin() || (isSignedIn() && existing().user_id == request.auth.uid);
+    }
+
+    match /focuflow_accounts/{accountId} {
+      allow read: if isSignedIn() && (resource.data.user_id == request.auth.uid || isAdmin());
+      allow write: if isEmailVerified() && (incoming().user_id == request.auth.uid || isAdmin());
+    }
+
+    match /focuflow_recurring/{recurringId} {
+      allow read: if isSignedIn() && (resource.data.user_id == request.auth.uid || isAdmin());
+      allow write: if isEmailVerified() && (incoming().user_id == request.auth.uid || isAdmin());
+    }
+
+    match /focuflow_third_parties/{thirdPartyId} {
+      allow read: if isSignedIn() && (resource.data.user_id == request.auth.uid || isAdmin());
+      allow write: if isEmailVerified() && (incoming().user_id == request.auth.uid || isAdmin());
+    }
+
+    match /system_notifications/{notificationId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /bug_reports/{reportId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isEmailVerified() && isValidBugReport(incoming());
+      allow update, delete: if isAdmin();
+    }
+
+    match /conversations/{convoId} {
+      allow list: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow get: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isEmailVerified() && isValidConversation(incoming());
+      allow update: if isEmailVerified() && isValidConversation(incoming()) && (existing().uid == request.auth.uid || isAdmin());
+      allow delete: if isAdmin() || (isSignedIn() && existing().uid == request.auth.uid);
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && (get(/databases/$(database)/documents/conversations/$(convoId)).data.uid == request.auth.uid || isAdmin());
+        allow create: if isEmailVerified() && isValidMessage(incoming()) && (get(/databases/$(database)/documents/conversations/$(convoId)).data.uid == request.auth.uid);
+        allow update: if isEmailVerified() && isValidMessage(incoming()) && (get(/databases/$(database)/documents/conversations/$(convoId)).data.uid == request.auth.uid);
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /rpa_workflows/{workflowId} {
+      allow list: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow get: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isEmailVerified() && isValidWorkflow(incoming());
+      allow update: if isEmailVerified() && isValidWorkflow(incoming()) && (existing().uid == request.auth.uid || isAdmin());
+      allow delete: if isAdmin() || (isSignedIn() && existing().uid == request.auth.uid);
+    }
+  }
+}

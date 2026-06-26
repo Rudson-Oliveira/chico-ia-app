@@ -1,0 +1,367 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "name": { "type": "string" },
+        "subscriptionStatus": { "type": "string", "enum": ["pending", "active", "inactive", "canceled"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "lastSeen": { "type": "string", "format": "date-time" },
+        "profilePicUrl": { "type": "string" },
+        "theme": { "type": "string" },
+        "customThemeColor": { "type": "string" },
+        "voiceName": { "type": "string" },
+        "textToSpeechEnabled": { "type": "boolean" },
+        "usingOwnKey": { "type": "boolean" },
+        "allowedIP": { "type": "string" },
+        "termsAccepted": { "type": "boolean" },
+        "termsAcceptedAt": { "type": "string", "format": "date-time" },
+        "usage": {
+          "type": "object",
+          "properties": {
+            "totalTokens": { "type": "number" },
+            "totalCost": { "type": "number" },
+            "remainingTokens": { "type": "number" }
+          }
+        },
+        "programmingLevel": { "type": "string", "enum": ["basic", "intermediate", "advanced"] },
+        "chicoCustomName": { "type": "string" },
+        "userPreferredName": { "type": "string" },
+        "socialLinks": {
+          "type": "object",
+          "properties": {
+            "instagram": { "type": "string" },
+            "site": { "type": "string" },
+            "facebook": { "type": "string" }
+          }
+        },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "integrations": {
+          "type": "object",
+          "properties": {
+            "openClaw": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "localUrl": { "type": "string" },
+                "remoteUrl": { "type": "string" },
+                "useRemote": { "type": "boolean" }
+              }
+            },
+            "ollama": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "url": { "type": "string" }
+              }
+            },
+            "claudeCode": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "apiKey": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
+      "required": ["uid", "email", "name"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "A chat conversation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "title": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "isArchived": { "type": "boolean" }
+      },
+      "required": ["uid", "title", "createdAt"]
+    },
+    "ConversationMessage": {
+      "title": "Conversation Message",
+      "description": "A message within a conversation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "model", "system"] },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "summary": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "fileName": { "type": "string" },
+        "blockType": { "type": "string", "enum": ["code", "text", "prompt"] },
+        "uid": { "type": "string" }
+      },
+      "required": ["role", "text", "timestamp"]
+    },
+    "FocoFlowItem": {
+      "title": "FocoFlow Item",
+      "description": "Tasks, projects, reminders, or links in FocoFlow",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "category": { "type": "string", "enum": ["task", "project", "reminder", "link"] },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["todo", "in_progress", "done"] },
+        "priority": { "type": "string", "enum": ["low", "medium", "high"] },
+        "project_id": { "type": "string" },
+        "name": { "type": "string" },
+        "color": { "type": "string" },
+        "reminderTime": { "type": "number" },
+        "url": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["user_id", "category", "createdAt"]
+    },
+    "FocoFlowTransaction": {
+      "title": "FocoFlow Transaction",
+      "description": "Financial transactions in FocoFlow",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["income", "expense"] },
+        "category": { "type": "string" },
+        "origin_type": { "type": "string" },
+        "date": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "sourceAccount": { "type": "string" },
+        "destinationAccount": { "type": "string" },
+        "relatedPerson": { "type": "string" },
+        "observations": { "type": "string" },
+        "impactsEquity": { "type": "boolean" },
+        "isRecurring": { "type": "boolean" },
+        "recurringId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "completed"] },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["user_id", "amount", "type", "date", "createdAt"]
+    },
+    "FocoFlowAccount": {
+      "title": "FocoFlow Account",
+      "description": "Financial accounts (banks, wallet, etc.)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "balance": { "type": "number" },
+        "color": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["user_id", "name", "balance", "createdAt"]
+    },
+    "FocoFlowRecurring": {
+      "title": "FocoFlow Recurring",
+      "description": "Recurring financial transactions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["income", "expense"] },
+        "frequency": { "type": "string", "enum": ["daily", "weekly", "monthly", "yearly"] },
+        "startDate": { "type": "number" },
+        "nextDate": { "type": "number" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["user_id", "description", "amount", "type", "frequency", "createdAt"]
+    },
+    "FocoFlowThirdParty": {
+      "title": "FocoFlow Third Party",
+      "description": "Entities like customers or suppliers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["customer", "supplier", "other"] },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "balance": { "type": "number" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["user_id", "name", "type", "createdAt"]
+    },
+    "SystemNotification": {
+      "title": "System Notification",
+      "description": "Global system notifications",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "linkUrl": { "type": "string" },
+        "linkText": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "viewCount": { "type": "number" }
+      },
+      "required": ["title", "message", "createdAt"]
+    },
+    "BugReport": {
+      "title": "Bug Report",
+      "description": "User submitted bug reports",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "userName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "description": { "type": "string" },
+        "screenshotUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["open", "resolved"] }
+      },
+      "required": ["uid", "description", "createdAt"]
+    },
+    "GeneratedImage": {
+      "title": "Generated Image",
+      "description": "Images generated by the user",
+      "type": "object",
+      "properties": {
+        "url": { "type": "string" },
+        "prompt": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["url", "prompt", "createdAt"]
+    },
+    "CustomAgent": {
+      "title": "Custom Agent",
+      "description": "User-defined custom agents",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "systemInstruction": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "systemInstruction", "createdAt"]
+    },
+    "RpaStep": {
+      "title": "Rpa Step",
+      "description": "A single step in an RPA workflow",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "label": { "type": "string" },
+        "config": { "type": "object" },
+        "status": { "type": "string" },
+        "result": { "type": "string" },
+        "error": { "type": "string" },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "RpaWorkflow": {
+      "title": "Rpa Workflow",
+      "description": "An automated browser workflow",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "steps": { 
+          "type": "array",
+          "items": { "$ref": "RpaStep" }
+        },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "lastRunAt": { "type": "string", "format": "date-time" },
+        "lastRunDuration": { "type": "number" },
+        "tags": { 
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["uid", "name", "steps", "status", "createdAt", "updatedAt"]
+    },
+    "TestConnection": {
+      "title": "Test Connection",
+      "description": "Entity for connectivity testing",
+      "type": "object",
+      "properties": {
+        "status": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/test/{docId}": {
+      "schema": "TestConnection",
+      "description": "Connectivity test collection"
+    },
+    "/users/{uid}": {
+      "schema": "UserProfile",
+      "description": "User profile documents"
+    },
+    "/users/{uid}/generatedImages/{imageId}": {
+      "schema": "GeneratedImage",
+      "description": "Images generated by a specific user"
+    },
+    "/users/{uid}/custom_agents/{agentId}": {
+      "schema": "CustomAgent",
+      "description": "Custom agents defined by a specific user"
+    },
+    "/focuflow_items/{itemId}": {
+      "schema": "FocoFlowItem",
+      "description": "FocoFlow items (tasks, projects, etc.)"
+    },
+    "/focuflow_financial_transactions/{transactionId}": {
+      "schema": "FocoFlowTransaction",
+      "description": "FocoFlow financial transactions"
+    },
+    "/focuflow_accounts/{accountId}": {
+      "schema": "FocoFlowAccount",
+      "description": "FocoFlow accounts"
+    },
+    "/focuflow_recurring/{recurringId}": {
+      "schema": "FocoFlowRecurring",
+      "description": "FocoFlow recurring transactions"
+    },
+    "/focuflow_third_parties/{thirdPartyId}": {
+      "schema": "FocoFlowThirdParty",
+      "description": "FocoFlow third parties"
+    },
+    "/system_notifications/{notificationId}": {
+      "schema": "SystemNotification",
+      "description": "Global system notifications"
+    },
+    "/bug_reports/{reportId}": {
+      "schema": "BugReport",
+      "description": "User bug reports"
+    },
+    "/conversations/{convoId}": {
+      "schema": "Conversation",
+      "description": "Chat conversations"
+    },
+    "/conversations/{convoId}/messages/{messageId}": {
+      "schema": "ConversationMessage",
+      "description": "Messages within a conversation"
+    },
+    "/rpa_workflows/{workflowId}": {
+      "schema": "RpaWorkflow",
+      "description": "User-defined RPA workflows"
+    }
+  }
+}

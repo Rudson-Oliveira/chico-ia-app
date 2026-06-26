@@ -1,0 +1,9 @@
+{
+  "name": "Remix: Remix: Remix: Chico",
+  "description": "Assistente inteligente Chico para automação e produtividade com integração FocoFlow.",
+  "requestFramePermissions": [
+    "microphone",
+    "display-capture",
+    "camera"
+  ]
+}
