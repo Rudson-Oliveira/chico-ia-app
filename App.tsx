@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { evaluate } from 'mathjs';
-import { createLiveSession, LiveSessionController, sendTextMessage, summarizeText, validateApiKey } from './services/geminiService';
+import { createLiveSession, LiveSessionController, sendTextMessage, summarizeText, transcribeImage, validateApiKey } from './services/geminiService';
 import { 
     createFocoFlowTask, 
     createFocoFlowTransaction, 
@@ -501,6 +501,56 @@ export const App: React.FC<AppProps> = ({ user, initialUserData, onApplyTheme })
     } catch (err: any) {
       console.error('Web Command Error:', err);
       return { success: false, message: err?.message || 'Erro ao executar comando web.' };
+    }
+  };
+
+  const handleSkyvernCommand = async (args: any) => {
+    try {
+      const objetivo = String(args?.objetivo || '').trim();
+      if (!objetivo) return { success: false, message: 'Objetivo da tarefa não informado.' };
+      const url = String(args?.url || '').trim();
+      const { skyvernClient } = await import('./services/skyvernClient');
+
+      const run = await skyvernClient.run(objetivo, url ? (url.startsWith('http') ? url : `https://${url}`) : undefined);
+      if (!run.ok || !run.taskId) {
+        return { success: false, message: run.message || run.error || 'Não foi possível iniciar a tarefa autônoma.' };
+      }
+      addMessage('system', `Tarefa autônoma iniciada (Skyvern). Acompanhando o progresso...${run.appUrl ? `\nDetalhes: ${run.appUrl}` : ''}`);
+
+      let lastStatus = '';
+      const final = await skyvernClient.waitUntilDone(run.taskId, {
+        onProgress: (s) => {
+          if (s.ok && s.status && s.status !== lastStatus) {
+            lastStatus = s.status;
+            addMessage('system', `Progresso da tarefa: ${s.status}${s.stepCount ? ` (passo ${s.stepCount})` : ''}.`);
+          }
+        },
+      });
+
+      if (!final.ok) return { success: false, message: final.message || final.error || 'Falha ao acompanhar a tarefa.' };
+      if (final.status === 'completed') {
+        const out = final.output ? `\n\nResultado:\n${typeof final.output === 'string' ? final.output : JSON.stringify(final.output, null, 2)}` : '';
+        return { success: true, message: `Tarefa autônoma concluída com sucesso.${out}` };
+      }
+      const reason = final.failureReason ? `\nMotivo: ${final.failureReason}` : '';
+      return { success: true, message: `Tarefa autônoma finalizou com status "${final.status}".${reason}${final.message ? `\n${final.message}` : ''}` };
+    } catch (err: any) {
+      console.error('Skyvern Command Error:', err);
+      return { success: false, message: err?.message || 'Erro ao executar a tarefa autônoma.' };
+    }
+  };
+
+  const handleTranscribeImageCommand = async (fileData?: { base64: string; mimeType: string }) => {
+    try {
+      if (!fileData?.base64) {
+        return { success: false, message: 'Nenhuma imagem foi anexada para transcrever. Peça ao usuário para anexar uma foto/print.' };
+      }
+      const text = await transcribeImage(fileData.base64, fileData.mimeType || 'image/jpeg');
+      if (!text) return { success: false, message: 'Não consegui identificar texto na imagem.' };
+      return { success: true, message: `Texto transcrito da imagem:\n\n${text}` };
+    } catch (err: any) {
+      console.error('Transcribe Image Error:', err);
+      return { success: false, message: err?.message || 'Erro ao transcrever a imagem.' };
     }
   };
 
@@ -2519,6 +2569,12 @@ export const App: React.FC<AppProps> = ({ user, initialUserData, onApplyTheme })
                   } else if (fc.name === 'ler_pagina' || fc.name === 'pesquisar' || fc.name === 'extrair') {
                       const res = await handleWebCommand(fc.name, fc.args);
                       addMessage('system', res.message || 'Ação web concluída.');
+                  } else if (fc.name === 'tarefa_autonoma') {
+                      const res = await handleSkyvernCommand(fc.args);
+                      addMessage('system', res.message || 'Tarefa autônoma concluída.');
+                  } else if (fc.name === 'transcrever_imagem') {
+                      const res = await handleTranscribeImageCommand(fileData);
+                      addMessage('system', res.message || 'Transcrição concluída.');
                   } else if (fc.name === 'calculate') {
                       const res = await handleCalculateCommand((fc.args as any).expression);
                       addMessage('system', `Resultado do cálculo: ${res.result || res.error}`);

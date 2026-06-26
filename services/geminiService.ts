@@ -566,6 +566,30 @@ const extractPageFunctionDeclaration: FunctionDeclaration = {
   }
 };
 
+const tarefaAutonomaFunctionDeclaration: FunctionDeclaration = {
+  name: 'tarefa_autonoma',
+  description: 'Executa uma tarefa COMPLEXA/multi-passo na web por OBJETIVO em linguagem natural, via Skyvern (visão + IA, navega sozinho e resiste a mudanças de layout). Use para objetivos como "entre no portal X, busque o paciente Y e gere a guia", "faça login no sistema e baixe o relatório do mês". NÃO use para passos simples e diretos (preencher um campo conhecido, clicar uma vez) — para isso use as ferramentas de RPA. NÃO use para apenas LER/extrair conteúdo — para isso use ler_pagina/extrair. A tarefa roda no servidor e pode levar alguns minutos; o progresso é acompanhado automaticamente.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      objetivo: { type: Type.STRING, description: 'Descrição clara e completa do objetivo a ser cumprido, em linguagem natural.' },
+      url: { type: Type.STRING, description: 'URL inicial opcional (https://...). Se omitida, o Skyvern decide por onde começar.' }
+    },
+    required: ['objetivo']
+  }
+};
+
+const transcreverImagemFunctionDeclaration: FunctionDeclaration = {
+  name: 'transcrever_imagem',
+  description: 'Transcreve (OCR) o texto de uma imagem ANEXADA pelo usuário usando visão. Use quando o usuário enviar uma foto/print (ex.: quadro de OKR, documento, formulário) e pedir para "transcrever", "ler" ou "extrair o texto". O texto transcrito fica disponível e pode, em seguida, ser preenchido em um campo via RPA (ferramenta interactWithBrowser/generateAndRunRpa). Só funciona quando há uma imagem anexada na mensagem.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      foco: { type: Type.STRING, description: 'Opcional: parte específica da imagem a transcrever (ex.: "apenas a tabela", "o título").' }
+    }
+  }
+};
+
 function executeGetCurrentDateTimeBrazil(): string {
   const now = new Date();
   return now.toLocaleString('pt-BR', { 
@@ -594,9 +618,11 @@ export const baseSystemInstruction = `
     2. **Visão e OCR**: Se o usuário enviar uma imagem ou compartilhar a tela, analise-a detalhadamente. Você pode extrair texto (OCR) e descrever elementos visuais (Vision).
     3. **Capacidade Computacional**: Use a ferramenta 'calculate' para qualquer cálculo matemático que não seja trivial, garantindo precisão absoluta.
     4. **Navegação e RPA (Headless)**: Você pode navegar na web e executar funções via 'openBrowser' e 'generateAndRunRpa'. Isso permite automação de tarefas repetitivas ou busca de informações em sites específicos.
-       - **LER vs AGIR (escolha a ferramenta certa)**:
-         - Para LER/RESUMIR/EXTRAIR conteúdo de um site (sem interagir): use 'ler_pagina(url)' (lê markdown limpo, Firecrawl com fallback para navegador), 'pesquisar(query)' (busca fontes na web) e 'extrair(url, campos)' (dados estruturados). Prefira essas ferramentas quando o usuário disser "leia", "resuma", "o que tem no site X", "pesquise sobre Y".
-         - Para AGIR (preencher campo, clicar, digitar, navegar em sistemas): use as ferramentas de RPA ('generateAndRunRpa', 'interactWithBrowser', 'inspectBrowserPage'). Use quando o usuário disser "preencha", "clique", "digite", "faça login".
+       - **ESCOLHA DA FERRAMENTA CERTA (3 camadas)**:
+         - LER/RESUMIR/EXTRAIR conteúdo de um site (sem interagir): use 'ler_pagina(url)' (markdown limpo, Firecrawl com fallback para navegador), 'pesquisar(query)' (busca fontes na web) e 'extrair(url, campos)' (dados estruturados). Prefira quando o usuário disser "leia", "resuma", "o que tem no site X", "pesquise sobre Y".
+         - AGIR em passos SIMPLES/DIRETOS (1-2 ações, campo conhecido: preencher, clicar, digitar): use as ferramentas de RPA ('generateAndRunRpa', 'interactWithBrowser', 'inspectBrowserPage'). São baratas e rápidas. Use quando o usuário disser "preencha esse campo", "clique aqui", "digite isso".
+         - TAREFA AUTÔNOMA COMPLEXA/MULTI-PASSO por OBJETIVO (ex.: "entre no portal X, busque o paciente Y e gere a guia", "faça login e baixe o relatório"): use 'tarefa_autonoma(objetivo, url?)'. O Skyvern navega sozinho com visão+IA, resistindo a mudanças de layout. Pode levar minutos; o progresso é acompanhado.
+       - **PONTE FOTO → TEXTO → PREENCHER**: Quando o usuário ANEXAR uma imagem (foto/print) e pedir para transcrever/ler, use 'transcrever_imagem'. Se em seguida ele pedir para PREENCHER o texto transcrito em um campo do sistema, encadeie: pegue o texto da transcrição e use 'interactWithBrowser'/'generateAndRunRpa' (ou 'tarefa_autonoma' se for multi-passo) para digitá-lo no campo indicado.
        - **ECONOMIA E PRECISÃO**: Para interagir com o sistema interno, prefira SEMPRE as ferramentas 'inspectBrowserPage' e 'interactWithBrowser' em vez de pedir compartilhamento de tela ao vivo. Isso é mais barato e preciso.
        - Se o usuário pedir para fazer algo no sistema, use 'inspectBrowserPage' para ver onde você está e o que pode clicar.
        - Use 'getSystemFlows' para saber o passo-a-passo de processos complexos (como cadastros).
@@ -710,6 +736,23 @@ export const summarizeText = async (text: string): Promise<string> => {
     } catch (error) {
         return "Nova Conversa";
     }
+};
+
+// Transcreve/extrai (OCR) o texto de uma imagem usando o Gemini Vision.
+// Recebe base64 puro (sem prefixo data:) ou data URL; retorna apenas o texto.
+export const transcribeImage = async (imageBase64: string, mimeType: string = 'image/jpeg'): Promise<string> => {
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    const data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
+    const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: {
+            parts: [
+                { text: 'Transcreva fielmente TODO o texto visível nesta imagem (OCR). Preserve a ordem e a estrutura (listas, linhas, colunas). Responda APENAS com o texto transcrito, sem comentários adicionais.' },
+                { inlineData: { data, mimeType } },
+            ],
+        },
+    });
+    return response.text?.trim() || '';
 };
 
 export const generateImage = async (prompt: string, style: string, aspectRatio: string): Promise<string> => {
@@ -836,7 +879,9 @@ export const sendTextMessage = async (
         waitForElementFunctionDeclaration,
         readPageFunctionDeclaration,
         searchWebFunctionDeclaration,
-        extractPageFunctionDeclaration
+        extractPageFunctionDeclaration,
+        tarefaAutonomaFunctionDeclaration,
+        transcreverImagemFunctionDeclaration
     ];
 
     if (integrations?.openClaw?.enabled) functionDeclarations.push(callOpenClawFunctionDeclaration);

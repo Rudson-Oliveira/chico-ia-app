@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import axios from 'axios';
 import { mountRpaRoutes } from './rpaServer';
 import { mountWebRoutes } from './firecrawlServer';
+import { mountSkyvernRoutes } from './skyvernServer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,6 +21,9 @@ async function startServer() {
 
   // Leitura/pesquisa/extracao (Firecrawl -> fallback Playwright).
   mountWebRoutes(app);
+
+  // Automacao autonoma por objetivo (Skyvern, nuvem). 503 amigavel sem chave.
+  mountSkyvernRoutes(app);
 
   // Dynamic Proxy with Header Stripping and Cookie Support
   app.use('/proxy', (req, res, next) => {
