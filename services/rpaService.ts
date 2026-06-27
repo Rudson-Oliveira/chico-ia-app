@@ -1,6 +1,15 @@
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, where, orderBy, Timestamp } from 'firebase/firestore';
 import { RpaWorkflow, RpaStep, RpaLogEntry, RpaStepType, RpaStepStatus, RpaWorkflowStatus } from '../types';
+import { getProxyBase } from '../proxyBase';
+import { rpaClient } from './rpaClient';
+
+// Quando true, as ações de automação rodam no servidor (Playwright)
+// em vez de tocar no iframe.contentWindow (bloqueado por cross-origin
+// no ambiente publicado). Ativado pelo InternalBrowser ao detectar o backend.
+let serverSideMode = false;
+export const setServerSideMode = (enabled: boolean) => { serverSideMode = enabled; };
+export const isServerSideMode = () => serverSideMode;
 
 const RPA_COLLECTION = 'rpa_workflows';
 const RPA_LOGS_COLLECTION = 'rpa_logs';
@@ -110,8 +119,7 @@ const executeStepInWindow = async (step: RpaStep, targetWindow: Window): Promise
   switch (step.type) {
     case 'navigate': {
       const targetUrl = step.config.url || '';
-      const proxyBase = '__PORT_8000__'.startsWith('__') ? '' : '__PORT_8000__';
-      const proxyUrl = `${proxyBase}/proxy?url=${encodeURIComponent(targetUrl)}`;
+      const proxyUrl = `${getProxyBase()}/proxy?url=${encodeURIComponent(targetUrl)}`;
       targetWindow.location.href = proxyUrl;
       await delay(step.config.timeout || 3000);
       return `Navigated to ${targetUrl} (via proxy)`;
@@ -344,6 +352,13 @@ export const generateWorkflowFromPrompt = (prompt: string): RpaStep[] => {
 // === RPA Helpers for Agent ===
 
 export const fillForm = async (fields: Record<string, string>): Promise<void> => {
+  if (serverSideMode) {
+    for (const [selector, text] of Object.entries(fields)) {
+      const res = await rpaClient.type(text, selector, true);
+      if (!res.ok) throw new Error(res.error || res.message || `Falha ao preencher ${selector}`);
+    }
+    return;
+  }
   if (!rpaIframe && !rpaWindow) throw new Error('No target window/iframe for RPA');
   const target = rpaIframe?.contentWindow || rpaWindow;
   if (!target) throw new Error('Target window not available');
@@ -354,6 +369,12 @@ export const fillForm = async (fields: Record<string, string>): Promise<void> =>
 };
 
 export const extractData = async (selector: string): Promise<string> => {
+  if (serverSideMode) {
+    const res = await rpaClient.dom();
+    if (!res.ok) throw new Error(res.error || 'Falha ao ler DOM');
+    const el = (res.elements || []).find(e => e.id === selector || e.name === selector || e.text === selector);
+    return el?.text || '';
+  }
   if (!rpaIframe && !rpaWindow) throw new Error('No target window/iframe for RPA');
   const target = rpaIframe?.contentWindow || rpaWindow;
   if (!target) throw new Error('Target window not available');
@@ -362,6 +383,12 @@ export const extractData = async (selector: string): Promise<string> => {
 };
 
 export const scrollPage = async (direction: 'up' | 'down' | 'top' | 'bottom', selector?: string): Promise<void> => {
+  if (serverSideMode) {
+    const dy = direction === 'up' ? -800 : direction === 'top' ? -100000 : direction === 'bottom' ? 100000 : 800;
+    const res = await rpaClient.scroll(dy);
+    if (!res.ok) throw new Error(res.error || 'Falha ao rolar');
+    return;
+  }
   if (!rpaIframe && !rpaWindow) throw new Error('No target window/iframe for RPA');
   const target = rpaIframe?.contentWindow || rpaWindow;
   if (!target) throw new Error('Target window not available');
@@ -383,6 +410,11 @@ export const waitForElement = async (selector: string, timeout: number = 10000):
 };
 
 export const getPageMap = async (): Promise<any> => {
+  if (serverSideMode) {
+    const res = await rpaClient.dom();
+    if (!res.ok) throw new Error(res.error || 'Falha ao ler DOM');
+    return { url: res.url, elements: res.elements || [], selects: [] };
+  }
   if (!rpaIframe && !rpaWindow) throw new Error('No target window/iframe for RPA');
   const target = rpaIframe?.contentWindow || rpaWindow;
   if (!target) throw new Error('Target window not available');

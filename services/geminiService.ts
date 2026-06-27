@@ -528,6 +528,68 @@ const updateUserPreferencesFunctionDeclaration: FunctionDeclaration = {
   }
 };
 
+const readPageFunctionDeclaration: FunctionDeclaration = {
+  name: 'ler_pagina',
+  description: 'LÊ/resume o conteúdo de uma página web (texto limpo em markdown). Use quando o usuário pedir para "ler", "resumir" ou "ver o que tem" em um site/URL. NÃO interage com a página — apenas extrai o conteúdo. Usa Firecrawl com fallback automático para navegador.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      url: { type: Type.STRING, description: 'A URL completa da página a ser lida (https://...).' }
+    },
+    required: ['url']
+  }
+};
+
+const searchWebFunctionDeclaration: FunctionDeclaration = {
+  name: 'pesquisar',
+  description: 'Pesquisa na web por uma consulta e retorna uma lista de resultados (título, URL, trecho). Use quando o usuário quiser encontrar sites/fontes sobre um assunto.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      query: { type: Type.STRING, description: 'O termo/pergunta de pesquisa.' },
+      limit: { type: Type.NUMBER, description: 'Número máximo de resultados (padrão 5).' }
+    },
+    required: ['query']
+  }
+};
+
+const extractPageFunctionDeclaration: FunctionDeclaration = {
+  name: 'extrair',
+  description: 'Extrai dados ESTRUTURADOS de uma página web (ex.: preços, tabelas, campos específicos). Use quando o usuário pedir dados específicos de um site.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      url: { type: Type.STRING, description: 'A URL da página de onde extrair dados.' },
+      campos: { type: Type.STRING, description: 'Descrição em linguagem natural dos campos/dados desejados.' }
+    },
+    required: ['url']
+  }
+};
+
+const tarefaAutonomaFunctionDeclaration: FunctionDeclaration = {
+  name: 'tarefa_autonoma',
+  description: 'Executa uma tarefa COMPLEXA/multi-passo na web por OBJETIVO em linguagem natural, via Skyvern (visão + IA, navega sozinho e resiste a mudanças de layout). Use para objetivos como "entre no portal X, busque o paciente Y e gere a guia", "faça login no sistema e baixe o relatório do mês". NÃO use para passos simples e diretos (preencher um campo conhecido, clicar uma vez) — para isso use as ferramentas de RPA. NÃO use para apenas LER/extrair conteúdo — para isso use ler_pagina/extrair. A tarefa roda no servidor e pode levar alguns minutos; o progresso é acompanhado automaticamente.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      objetivo: { type: Type.STRING, description: 'Descrição clara e completa do objetivo a ser cumprido, em linguagem natural.' },
+      url: { type: Type.STRING, description: 'URL inicial opcional (https://...). Se omitida, o Skyvern decide por onde começar.' }
+    },
+    required: ['objetivo']
+  }
+};
+
+const transcreverImagemFunctionDeclaration: FunctionDeclaration = {
+  name: 'transcrever_imagem',
+  description: 'Transcreve (OCR) o texto de uma imagem ANEXADA pelo usuário usando visão. Use quando o usuário enviar uma foto/print (ex.: quadro de OKR, documento, formulário) e pedir para "transcrever", "ler" ou "extrair o texto". O texto transcrito fica disponível e pode, em seguida, ser preenchido em um campo via RPA (ferramenta interactWithBrowser/generateAndRunRpa). Só funciona quando há uma imagem anexada na mensagem.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      foco: { type: Type.STRING, description: 'Opcional: parte específica da imagem a transcrever (ex.: "apenas a tabela", "o título").' }
+    }
+  }
+};
+
 function executeGetCurrentDateTimeBrazil(): string {
   const now = new Date();
   return now.toLocaleString('pt-BR', { 
@@ -556,6 +618,11 @@ export const baseSystemInstruction = `
     2. **Visão e OCR**: Se o usuário enviar uma imagem ou compartilhar a tela, analise-a detalhadamente. Você pode extrair texto (OCR) e descrever elementos visuais (Vision).
     3. **Capacidade Computacional**: Use a ferramenta 'calculate' para qualquer cálculo matemático que não seja trivial, garantindo precisão absoluta.
     4. **Navegação e RPA (Headless)**: Você pode navegar na web e executar funções via 'openBrowser' e 'generateAndRunRpa'. Isso permite automação de tarefas repetitivas ou busca de informações em sites específicos.
+       - **ESCOLHA DA FERRAMENTA CERTA (3 camadas)**:
+         - LER/RESUMIR/EXTRAIR conteúdo de um site (sem interagir): use 'ler_pagina(url)' (markdown limpo, Firecrawl com fallback para navegador), 'pesquisar(query)' (busca fontes na web) e 'extrair(url, campos)' (dados estruturados). Prefira quando o usuário disser "leia", "resuma", "o que tem no site X", "pesquise sobre Y".
+         - AGIR em passos SIMPLES/DIRETOS (1-2 ações, campo conhecido: preencher, clicar, digitar): use as ferramentas de RPA ('generateAndRunRpa', 'interactWithBrowser', 'inspectBrowserPage'). São baratas e rápidas. Use quando o usuário disser "preencha esse campo", "clique aqui", "digite isso".
+         - TAREFA AUTÔNOMA COMPLEXA/MULTI-PASSO por OBJETIVO (ex.: "entre no portal X, busque o paciente Y e gere a guia", "faça login e baixe o relatório"): use 'tarefa_autonoma(objetivo, url?)'. O Skyvern navega sozinho com visão+IA, resistindo a mudanças de layout. Pode levar minutos; o progresso é acompanhado.
+       - **PONTE FOTO → TEXTO → PREENCHER**: Quando o usuário ANEXAR uma imagem (foto/print) e pedir para transcrever/ler, use 'transcrever_imagem'. Se em seguida ele pedir para PREENCHER o texto transcrito em um campo do sistema, encadeie: pegue o texto da transcrição e use 'interactWithBrowser'/'generateAndRunRpa' (ou 'tarefa_autonoma' se for multi-passo) para digitá-lo no campo indicado.
        - **ECONOMIA E PRECISÃO**: Para interagir com o sistema interno, prefira SEMPRE as ferramentas 'inspectBrowserPage' e 'interactWithBrowser' em vez de pedir compartilhamento de tela ao vivo. Isso é mais barato e preciso.
        - Se o usuário pedir para fazer algo no sistema, use 'inspectBrowserPage' para ver onde você está e o que pode clicar.
        - Use 'getSystemFlows' para saber o passo-a-passo de processos complexos (como cadastros).
@@ -671,6 +738,23 @@ export const summarizeText = async (text: string): Promise<string> => {
     }
 };
 
+// Transcreve/extrai (OCR) o texto de uma imagem usando o Gemini Vision.
+// Recebe base64 puro (sem prefixo data:) ou data URL; retorna apenas o texto.
+export const transcribeImage = async (imageBase64: string, mimeType: string = 'image/jpeg'): Promise<string> => {
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    const data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
+    const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: {
+            parts: [
+                { text: 'Transcreva fielmente TODO o texto visível nesta imagem (OCR). Preserve a ordem e a estrutura (listas, linhas, colunas). Responda APENAS com o texto transcrito, sem comentários adicionais.' },
+                { inlineData: { data, mimeType } },
+            ],
+        },
+    });
+    return response.text?.trim() || '';
+};
+
 export const generateImage = async (prompt: string, style: string, aspectRatio: string): Promise<string> => {
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
     let arValue = "1:1";
@@ -754,11 +838,13 @@ export const sendTextMessage = async (
     const focoFlowKeywords = ['tarefa', 'projeto', 'lembrete', 'transação', 'finança', 'link', 'focoflow', 'foco flow', 'balanço', 'relatório', 'gasto', 'receita', 'pix', 'pagamento', 'saldo', 'dinheiro', 'custo', 'valor', 'comprei', 'vendi', 'paguei', 'recebi', 'ganhei', 'perdi', 'investi', 'economizei', 'poupança', 'banco', 'cartão', 'crédito', 'débito', 'extrato', 'movimentação'];
     const systemKeywords = ['câmera', 'tela', 'agente', 'especialista', 'alarme', 'preferência', 'nome', 'ajuda', 'suporte', 'configuração', 'tema', 'cor', 'lembra', 'conversamos', 'disse', 'falamos', 'passado', 'memória', 'histórico'];
     
+    const webKeywords = ['leia', 'ler', 'resuma', 'resumir', 'resumo', 'extrair', 'extraia', 'site', 'página', 'pagina', 'url', 'link', 'acessa o site', 'abra o site'];
     const lowerMessage = message.toLowerCase();
     // Use a more inclusive check or just always enable for default agent
-    const needsFunctions = agent === 'default' || 
-                           focoFlowKeywords.some(kw => lowerMessage.includes(kw)) || 
-                           systemKeywords.some(kw => lowerMessage.includes(kw));
+    const needsFunctions = agent === 'default' ||
+                           focoFlowKeywords.some(kw => lowerMessage.includes(kw)) ||
+                           systemKeywords.some(kw => lowerMessage.includes(kw)) ||
+                           webKeywords.some(kw => lowerMessage.includes(kw));
     
     // Search keywords: things that likely need real-time web info
     const searchKeywords = ['preço', 'cotação', 'notícia', 'clima', 'tempo', 'quem é', 'o que é', 'onde fica', 'como está', 'resultado', 'hoje', 'agora', 'atual', 'bitcoin', 'dólar', 'euro', 'bolsa', 'quem ganhou', 'quem venceu', 'placar', 'jogo', 'filme', 'série', 'elenco', 'busque', 'pesquise', 'procurar', 'search', 'google', 'internet', 'tempo real'];
@@ -790,7 +876,12 @@ export const sendTextMessage = async (
         getSystemFlowsFunctionDeclaration,
         scrollPageFunctionDeclaration,
         hoverElementFunctionDeclaration,
-        waitForElementFunctionDeclaration
+        waitForElementFunctionDeclaration,
+        readPageFunctionDeclaration,
+        searchWebFunctionDeclaration,
+        extractPageFunctionDeclaration,
+        tarefaAutonomaFunctionDeclaration,
+        transcreverImagemFunctionDeclaration
     ];
 
     if (integrations?.openClaw?.enabled) functionDeclarations.push(callOpenClawFunctionDeclaration);

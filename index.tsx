@@ -292,14 +292,28 @@ const Root = () => {
   useEffect(() => {
     let unsubscribeAuth: (() => void) | null = null;
     try {
-      unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-        setUser(currentUser);
+      unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
         if (!currentUser) {
-          // For development/preview, we can set a mock user if auth fails or is not needed
-          // But here we just set loading to false to show the Auth screen or proceed
+          // Login automatico (uso pessoal, single-user): autentica em silencio
+          // com as credenciais embutidas via env (VITE_AUTO_EMAIL/VITE_AUTO_PASSWORD).
+          // As credenciais NAO sao versionadas (ficam em .env.local).
+          const autoEmail = import.meta.env.VITE_AUTO_EMAIL as string | undefined;
+          const autoPassword = import.meta.env.VITE_AUTO_PASSWORD as string | undefined;
+          if (autoEmail && autoPassword) {
+            try {
+              const { signInWithEmailAndPassword } = await import('firebase/auth');
+              await signInWithEmailAndPassword(auth, autoEmail, autoPassword);
+              return; // onAuthStateChanged dispara de novo com o usuario logado
+            } catch (e) {
+              console.error('Auto-login falhou:', e);
+            }
+          }
+          setUser(null);
           setSubscriptionStatus('inactive');
           setAuthLoading(false);
+          return;
         }
+        setUser(currentUser);
       });
     } catch (error) {
       console.error("Firebase Auth initialization error:", error);
@@ -477,16 +491,13 @@ const Root = () => {
   }
   
   if (!user) {
-    // Guest Mode: Provide a mock user if not logged in
-    const guestUser = {
-      uid: 'guest_user',
-      email: 'guest@example.com',
-      displayName: 'Visitante',
-      photoURL: 'https://api.dicebear.com/7.x/avataaars/svg?seed=guest',
-      emailVerified: true
-    } as any;
-    
-    return <App user={guestUser} initialUserData={{...userData, name: 'Visitante'}} onApplyTheme={applyTheme} />;
+    // Single-user: o auto-login esta em andamento. Se as credenciais de
+    // auto-login nao estiverem configuradas ou falharem, cai para a tela de login.
+    const hasAutoLogin = Boolean(import.meta.env.VITE_AUTO_EMAIL && import.meta.env.VITE_AUTO_PASSWORD);
+    if (hasAutoLogin) {
+      return <LoadingScreen message="Entrando..." />;
+    }
+    return <Auth />;
   }
 
   if (subscriptionStatus === 'loading') {
