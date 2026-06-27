@@ -2,6 +2,8 @@
 // AGENT SERVICE - Loop Autônomo Plan→Act→Observe→Reflect
 // ============================================================
 
+import { evaluate } from 'mathjs';
+
 export type AgentStatus = 'idle' | 'planning' | 'executing' | 'completed' | 'error';
 
 export interface AgentStep {
@@ -71,9 +73,9 @@ class AgentService {
       description: 'Realiza cálculos matemáticos e lógicos',
       execute: async (input: string) => {
         try {
-          // Safe math evaluation
-          const sanitized = input.replace(/[^0-9+\-*/().\s]/g, '');
-          const result = Function(`"use strict"; return (${sanitized})`)();
+          // Avaliação matemática segura via mathjs (sem Function()/eval).
+          // mathjs não tem acesso ao escopo global, evitando execução de código arbitrário.
+          const result = evaluate(input);
           return `Resultado: ${result}`;
         } catch (e) {
           return `Erro no cálculo: ${e}`;
