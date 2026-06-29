@@ -54,6 +54,9 @@ const InternalBrowser = ({
   // Digitação direta fluida: fila para preservar a ordem das teclas + screenshot com debounce.
   const keyQueueRef = useRef<Promise<any>>(Promise.resolve());
   const shotDebounceRef = useRef<number | null>(null);
+  // Captura de teclado confiável: um textarea invisível sobre a tela mantém o foco
+  // (diferente do <img>, que perde foco quando o screenshot atualiza).
+  const kbRef = useRef<HTMLTextAreaElement>(null);
 
   // ResizeObserver to sync canvas with container
   useEffect(() => {
@@ -144,15 +147,15 @@ const InternalBrowser = ({
     }
   };
 
-  // Converte coordenadas do clique na imagem para o viewport do Chromium.
-  const handleImageClick = async (e: React.MouseEvent<HTMLImageElement>) => {
-    const img = imgRef.current;
-    if (!img) return;
-    const rect = img.getBoundingClientRect();
+  // Converte coordenadas do clique (na sobreposição) para o viewport do Chromium.
+  const handleImageClick = async (e: React.MouseEvent<HTMLElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
     const sx = RPA_VIEWPORT.width / rect.width;
     const sy = RPA_VIEWPORT.height / rect.height;
     const x = Math.round((e.clientX - rect.left) * sx);
     const y = Math.round((e.clientY - rect.top) * sy);
+    // Mantém o teclado capturado para que o usuário possa digitar logo após clicar.
+    kbRef.current?.focus();
     setServerBusy(true);
     try {
       applyResult(await rpaClient.clickAt(x, y));
@@ -491,17 +494,29 @@ const InternalBrowser = ({
           )}
 
           {rpaMode === 'server' && (
-            <img
-              ref={imgRef}
-              src={shot ? `data:image/png;base64,${shot}` : undefined}
-              alt="Navegador (server-side)"
-              tabIndex={0}
-              onClick={handleImageClick}
-              onKeyDown={handleImageKeyDown}
-              onWheel={(e) => { void rpaClient.scroll(e.deltaY).then(applyResult); }}
-              className="w-full h-full object-contain bg-white cursor-pointer outline-none select-none"
-              draggable={false}
-            />
+            <>
+              <img
+                ref={imgRef}
+                src={shot ? `data:image/png;base64,${shot}` : undefined}
+                alt="Navegador (server-side)"
+                className="w-full h-full object-contain bg-white select-none pointer-events-none"
+                draggable={false}
+              />
+              {/* Camada transparente que recebe clique e teclado de forma confiável.
+                  Um textarea mantém o foco do teclado mesmo quando o screenshot atualiza. */}
+              <textarea
+                ref={kbRef}
+                onClick={handleImageClick}
+                onKeyDown={handleImageKeyDown}
+                onChange={() => { /* texto vai pro navegador via onKeyDown; nada acumula aqui */ }}
+                onWheel={(e) => { void rpaClient.scroll(e.deltaY).then(applyResult); }}
+                value=""
+                aria-label="Área de interação do navegador — clique para focar e digite"
+                spellCheck={false}
+                autoComplete="off"
+                className="absolute inset-0 w-full h-full resize-none bg-transparent text-transparent caret-transparent cursor-pointer outline-none z-10"
+              />
+            </>
           )}
 
           {rpaMode === 'iframe' && (
