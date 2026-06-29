@@ -33,6 +33,7 @@ import {
   captureSnapshot,
   rpaService
 } from './services/rpaService';
+import { rpaClient } from './services/rpaClient';
 import ChicoLogo from './components/ChicoLogo';
 import LoadingSpinner from './components/LoadingSpinner';
 import MessageItem from './components/MessageItem';
@@ -311,11 +312,19 @@ export const App: React.FC<AppProps> = ({ user, initialUserData, onApplyTheme })
           if (!/^https?:\/\//i.test(target)) target = `https://${target}`;
           const wasOpen = isBrowserOpen;
           if (!wasOpen) setIsBrowserOpen(true);
-          // Espera o navegador montar + detectar o modo (server/iframe) antes de navegar.
-          const delayMs = wasOpen ? 300 : 1600;
+          const serverReady = await rpaClient.isAvailable();
+          if (serverReady) {
+            // Modo server (Playwright): navega direto e AGUARDA concluir, para que
+            // ações seguintes (digitar/pesquisar) já encontrem a página carregada.
+            if (!wasOpen) await new Promise(r => setTimeout(r, 1500)); // deixa o nav inicial assentar
+            const r = await rpaClient.navigate(target);
+            window.dispatchEvent(new CustomEvent('agent-refresh-browser'));
+            return { success: !!r.ok, message: r.ok ? `Página ${target} carregada no navegador.` : (r.message || r.error || 'Falha ao navegar.') };
+          }
+          // Fallback iframe (sem Playwright)
           setTimeout(() => {
             window.dispatchEvent(new CustomEvent('agent-navigate', { detail: { url: target } }));
-          }, delayMs);
+          }, wasOpen ? 200 : 1200);
           return { success: true, message: `Navegando o navegador interno para ${target}.` };
         }
         case 'runRpaWorkflow':
@@ -348,11 +357,22 @@ export const App: React.FC<AppProps> = ({ user, initialUserData, onApplyTheme })
         case 'inspectBrowserPage':
           if (!isBrowserOpen) setIsBrowserOpen(true);
           setIsAiInspecting(true);
+          if (await rpaClient.isAvailable()) {
+            // Modo server-side (Playwright real): lê o DOM via rpaClient.
+            const domRes = await rpaClient.dom();
+            setIsAiInspecting(false);
+            return {
+              success: !!domRes.ok,
+              url: domRes.url,
+              title: domRes.title,
+              interactiveElements: (domRes.elements || []).slice(0, 30),
+            };
+          }
           const pageMap = await getPageMap();
           const snapshotSummary = await captureSnapshot();
           setIsAiInspecting(false);
-          return { 
-            success: true, 
+          return {
+            success: true,
             summary: snapshotSummary,
             interactiveElements: (pageMap.elements || []).slice(0, 30) // Limit to avoid token bloat
           };
@@ -362,6 +382,31 @@ export const App: React.FC<AppProps> = ({ user, initialUserData, onApplyTheme })
           const { action, selector, value } = args;
           let interactResult = "";
           try {
+            if (await rpaClient.isAvailable()) {
+              // Modo server-side (Playwright real): age direto no Chromium via rpaClient.
+              let r: { ok: boolean; error?: string; message?: string };
+              if (action === 'type') {
+                // Sem seletor -> digita no campo focado (ex.: caixa de busca do Google).
+                r = await rpaClient.type(String(value ?? ''), selector || undefined, true);
+                interactResult = r.ok ? `Digitado "${value}"${selector ? ' em ' + selector : ''}.` : (r.message || r.error || 'Falha ao digitar.');
+              } else if (action === 'press') {
+                r = await rpaClient.pressKey(String(value || 'Enter'));
+                interactResult = r.ok ? `Tecla ${value || 'Enter'} pressionada.` : (r.message || r.error || 'Falha na tecla.');
+              } else if (action === 'click') {
+                r = selector ? await rpaClient.clickSelector(selector) : await rpaClient.clickAt(Number(args.x) || 0, Number(args.y) || 0);
+                interactResult = r.ok ? `Clique em ${selector || `(${args.x},${args.y})`} ok.` : (r.message || r.error || 'Falha no clique.');
+              } else if (action === 'scroll') {
+                r = await rpaClient.scroll(value === 'up' ? -400 : 400);
+                interactResult = r.ok ? `Scroll ${value} ok.` : (r.message || r.error || 'Falha no scroll.');
+              } else {
+                r = { ok: false };
+                interactResult = `Ação "${action}" não suportada no navegador atual.`;
+              }
+              // Atualiza a tela do navegador interno após a interação.
+              window.dispatchEvent(new CustomEvent('agent-refresh-browser'));
+              setIsAiInspecting(false);
+              return { success: r.ok, message: interactResult };
+            }
             if (action === 'click') {
               // Trigger visual indicator on client side (canvas)
               const pageMap = await rpaService.getPageMap();
@@ -2562,7 +2607,7 @@ export const App: React.FC<AppProps> = ({ user, initialUserData, onApplyTheme })
                   } else if (fc.name === 'callOpenClaw' || fc.name === 'callOllama' || fc.name === 'callClaudeCode') {
                       const res = await handleExternalIntegrationCommand(fc.name, fc.args);
                       addMessage('system', `Resposta de ${fc.name.replace('call', '')}:\n${res.result || res.error}`);
-                  } else if (fc.name === 'openBrowser' || fc.name === 'navigateBrowser' || fc.name === 'closeBrowser' || fc.name === 'runRpaWorkflow' || fc.name === 'generateAndRunRpa') {
+                  } else if (fc.name === 'openBrowser' || fc.name === 'navigateBrowser' || fc.name === 'closeBrowser' || fc.name === 'runRpaWorkflow' || fc.name === 'generateAndRunRpa' || fc.name === 'inspectBrowserPage' || fc.name === 'interactWithBrowser' || fc.name === 'scrollPage' || fc.name === 'hoverElement' || fc.name === 'waitForElement' || fc.name === 'getSystemFlows') {
                       const res = await handleRpaCommand(fc.name, fc.args);
                       addMessage('system', res.message || res.error || "Ação RPA concluída.");
                   } else if (fc.name === 'ler_pagina' || fc.name === 'pesquisar' || fc.name === 'extrair') {

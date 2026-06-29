@@ -411,22 +411,22 @@ const interactWithBrowserFunctionDeclaration: FunctionDeclaration = {
   name: 'interactWithBrowser',
   parameters: {
     type: Type.OBJECT,
-    description: 'Interage com um elemento específico na página do navegador interno.',
+    description: 'Interage com a página do navegador interno. Para PESQUISAR em um site (ex.: Google): chame com action="type" e value="termo" (sem selector, digita no campo já focado) e depois action="press" com value="Enter". Use inspectBrowserPage antes se precisar descobrir seletores.',
     properties: {
-      action: { 
-        type: Type.STRING, 
-        description: 'Ação a realizar: "click", "type", "select", "scroll".' 
+      action: {
+        type: Type.STRING,
+        description: 'Ação: "type" (digita), "press" (pressiona uma tecla, ex.: Enter), "click", "scroll".'
       },
-      selector: { 
-        type: Type.STRING, 
-        description: 'O seletor CSS do elemento (ou ID/Classe).' 
+      selector: {
+        type: Type.STRING,
+        description: 'Opcional. Seletor CSS do elemento. Se omitido no "type", digita no campo atualmente focado.'
       },
-      value: { 
-        type: Type.STRING, 
-        description: 'O valor a ser digitado ou selecionado (se aplicável).' 
+      value: {
+        type: Type.STRING,
+        description: 'Para "type": o texto. Para "press": a tecla (ex.: "Enter"). Para "scroll": "up"/"down".'
       }
     },
-    required: ['action', 'selector']
+    required: ['action']
   }
 };
 

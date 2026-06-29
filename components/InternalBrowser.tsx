@@ -237,6 +237,17 @@ const InternalBrowser = ({
     return () => window.removeEventListener('agent-navigate', handleAgentNavigate);
   }, [rpaMode]);
 
+  // Após o agente interagir (digitar/clicar) no modo server, re-captura a tela.
+  useEffect(() => {
+    const handleAgentRefresh = async () => {
+      if (rpaMode !== 'server') return;
+      setServerBusy(true);
+      try { applyResult(await rpaClient.screenshot()); } finally { setServerBusy(false); }
+    };
+    window.addEventListener('agent-refresh-browser', handleAgentRefresh);
+    return () => window.removeEventListener('agent-refresh-browser', handleAgentRefresh);
+  }, [rpaMode]);
+
   useEffect(() => {
     if (chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
