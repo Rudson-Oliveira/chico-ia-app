@@ -10,8 +10,15 @@ import {
 import { evaluate } from 'mathjs';
 import { ConversationMessage } from "../types";
 
+// Chave informada pelo usuário em Configurações (tem prioridade sobre a do build).
+// Mantida em módulo para que TODAS as chamadas (texto, voz/Live, visão) a usem.
+let userProvidedApiKey = '';
+export const setUserApiKey = (key: string | null | undefined): void => {
+  userProvidedApiKey = (key || '').trim();
+};
+
 const getApiKey = (): string => {
-  return process.env.GEMINI_API_KEY || process.env.API_KEY || "";
+  return userProvidedApiKey || process.env.GEMINI_API_KEY || process.env.API_KEY || "";
 };
 
 export const validateApiKey = async (key: string): Promise<{ valid: boolean; message?: string }> => {

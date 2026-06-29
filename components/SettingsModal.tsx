@@ -22,6 +22,9 @@ interface SettingsModalProps {
     setIntegrations: (val: any) => void;
     socialLinks: any;
     setSocialLinks: (val: any) => void;
+    userApiKey?: string;
+    onSaveApiKey?: (key: string) => void;
+    validateApiKey?: (key: string) => Promise<{ valid: boolean; message?: string }>;
     onOpenArchived: () => void;
     onOpenFocoFlow: () => void;
 }
@@ -46,9 +49,44 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     setIntegrations,
     socialLinks,
     setSocialLinks,
+    userApiKey,
+    onSaveApiKey,
+    validateApiKey,
     onOpenArchived,
     onOpenFocoFlow
 }) => {
+    const [keyDraft, setKeyDraft] = React.useState(userApiKey || '');
+    const [keyStatus, setKeyStatus] = React.useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+    const [keyMsg, setKeyMsg] = React.useState('');
+
+    React.useEffect(() => {
+        if (isOpen) { setKeyDraft(userApiKey || ''); setKeyStatus('idle'); setKeyMsg(''); }
+    }, [isOpen, userApiKey]);
+
+    const handleSaveKey = async () => {
+        const k = keyDraft.trim();
+        if (!k) {
+            onSaveApiKey?.('');
+            setKeyStatus('saved');
+            setKeyMsg('Chave removida — usando a chave padrão do sistema.');
+            return;
+        }
+        setKeyStatus('saving');
+        setKeyMsg('Validando...');
+        try {
+            if (validateApiKey) {
+                const res = await validateApiKey(k);
+                if (!res.valid) { setKeyStatus('error'); setKeyMsg(res.message || 'Chave inválida.'); return; }
+            }
+            onSaveApiKey?.(k);
+            setKeyStatus('saved');
+            setKeyMsg('Chave salva e ativada! ✓');
+        } catch (e: any) {
+            setKeyStatus('error');
+            setKeyMsg(e?.message || 'Erro ao validar a chave.');
+        }
+    };
+
     if (!isOpen) return null;
 
     const updateIntegrations = async (newIntegrations: any) => {
@@ -80,6 +118,38 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
                 
                 <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                    {/* AI / API Key Section */}
+                    <div className="bg-[var(--bg-primary)] p-4 rounded-lg border border-[var(--border-color)]">
+                        <label className="block text-sm mb-2 text-[var(--text-secondary)] font-bold">Chave da API (Gemini)</label>
+                        <p className="text-xs text-[var(--text-secondary)] mb-3">
+                            Use sua própria chave do Google Gemini (começa com <code>AIzaSy…</code>). Fica salva apenas neste navegador e é usada na voz, no texto e na visão. Deixe em branco para usar a chave padrão do sistema.
+                        </p>
+                        <div className="flex gap-2">
+                            <input
+                                type="password"
+                                value={keyDraft}
+                                onChange={e => { setKeyDraft(e.target.value); setKeyStatus('idle'); setKeyMsg(''); }}
+                                placeholder="AIzaSy..."
+                                aria-label="Chave da API Gemini"
+                                autoComplete="off"
+                                className="flex-1 p-2 rounded bg-[var(--bg-secondary)] border border-[var(--border-color)] text-[var(--text-primary)] text-sm focus:outline-none focus:border-[var(--accent-primary)]"
+                            />
+                            <button
+                                onClick={handleSaveKey}
+                                disabled={keyStatus === 'saving'}
+                                className="px-4 py-2 bg-[var(--accent-primary)] text-[var(--accent-primary-text)] rounded text-sm font-bold hover:opacity-90 transition-opacity disabled:opacity-50 whitespace-nowrap"
+                            >
+                                {keyStatus === 'saving' ? 'Validando...' : 'Salvar'}
+                            </button>
+                        </div>
+                        {keyMsg && (
+                            <p className={`text-xs mt-2 ${keyStatus === 'error' ? 'text-[var(--destructive-color)]' : 'text-[var(--success-color)]'}`}>{keyMsg}</p>
+                        )}
+                        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-xs text-[var(--accent-primary)] hover:underline mt-2 inline-block">
+                            Onde pegar minha chave →
+                        </a>
+                    </div>
+
                     {/* Personalization Section */}
                     <div className="bg-[var(--bg-primary)] p-4 rounded-lg border border-[var(--border-color)]">
                         <label className="block text-sm mb-2 text-[var(--text-secondary)] font-bold">Personalização de Nomes</label>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { evaluate } from 'mathjs';
-import { createLiveSession, LiveSessionController, sendTextMessage, summarizeText, transcribeImage, validateApiKey } from './services/geminiService';
+import { createLiveSession, LiveSessionController, sendTextMessage, summarizeText, transcribeImage, validateApiKey, setUserApiKey as setGeminiUserApiKey } from './services/geminiService';
 import { 
     createFocoFlowTask, 
     createFocoFlowTransaction, 
@@ -239,6 +239,19 @@ export const App: React.FC<AppProps> = ({ user, initialUserData, onApplyTheme })
   const [validationErrorInSettings, setValidationErrorInSettings] = useState<string | null>(null);
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
   const [usdToBrlRate, setUsdToBrlRate] = useState<number | null>(null);
+
+  // Faz o geminiService usar a chave informada pelo usuario (Configuracoes) em
+  // TODAS as chamadas (texto, voz/Live, visao). Roda no load e a cada mudanca.
+  useEffect(() => { setGeminiUserApiKey(userApiKey || ''); }, [userApiKey]);
+
+  // Salva/limpa a chave do usuario: localStorage + estado + servico.
+  const saveUserApiKey = useCallback((key: string) => {
+    const trimmed = (key || '').trim();
+    if (trimmed) localStorage.setItem('userChicoApiKey', trimmed);
+    else localStorage.removeItem('userChicoApiKey');
+    setUserApiKey(trimmed || null);
+    setGeminiUserApiKey(trimmed);
+  }, []);
 
   // Settings & Profile State
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -3038,6 +3051,9 @@ export const App: React.FC<AppProps> = ({ user, initialUserData, onApplyTheme })
           setIntegrations={setIntegrations}
           socialLinks={socialLinks}
           setSocialLinks={setSocialLinks}
+          userApiKey={userApiKey || ''}
+          onSaveApiKey={saveUserApiKey}
+          validateApiKey={validateApiKey}
           onOpenArchived={() => { setIsSettingsModalOpen(false); setIsArchivedModalOpen(true); }}
           onOpenFocoFlow={() => { setIsSettingsModalOpen(false); setIsFocoFlowModalOpen(true); }}
       />
