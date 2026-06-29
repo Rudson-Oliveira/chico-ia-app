@@ -2489,6 +2489,8 @@ export const App: React.FC<AppProps> = ({ user, initialUserData, onApplyTheme })
                 onUpdateUserPreferencesCommand: handleUpdateUserPreferencesCommand,
                 onExternalIntegrationCommand: handleExternalIntegrationCommand,
                 onRpaCommand: handleRpaCommand,
+                onWebCommand: handleWebCommand,
+                onSkyvernCommand: handleSkyvernCommand,
                 onSessionReady: (session) => { /* Ready */ },
                 onAudioInputActivity: () => { lastMicActivityRef.current = Date.now(); }
             },

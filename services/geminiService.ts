@@ -681,6 +681,8 @@ export const baseSystemInstruction = `
     3. **Navegador Interno e RPA (Vision AI)**:
        - Você tem um navegador interno integrado para automação e visão.
        - Para ACESSAR/ENTRAR/ABRIR um site específico (ex.: "abre o Google"), use SEMPRE 'navigateBrowser' com a URL — ela já abre o navegador e navega. Use 'openBrowser' apenas para abrir o navegador sem um site definido. NUNCA afirme que abriu/acessou um site sem ter chamado 'navigateBrowser'; baseie sua resposta no resultado retornado pela função.
+       - **PESQUISAR/BUSCAR informação** (ex.: "pesquise home care", "procure sobre X", "o que é Y"): use a função 'pesquisar(query)' (Firecrawl) — NÃO abra o Google no navegador para digitar a busca, pois sites de busca bloqueiam automação com CAPTCHA. 'pesquisar' retorna fontes diretamente, sem navegador e sem CAPTCHA. Só use o navegador (navigateBrowser/interactWithBrowser) para INTERAGIR com um site específico que o usuário indicou, não para buscas genéricas.
+       - **Site com CAPTCHA / "tráfego incomum" / anti-bot, ou objetivo multi-passo que exige login/navegação resiliente**: use 'tarefa_autonoma(objetivo, url?)' (Skyvern, navegador stealth com visão+IA) em vez do RPA comum. Se uma ação de RPA encontrar CAPTCHA, ofereça ao usuário tentar via 'tarefa_autonoma'.
        - Use 'generateAndRunRpa' para realizar tarefas complexas no navegador (ex: "acesse o site X, preencha o campo Y e clique em Z").
        - Você pode "ver" o que acontece no navegador. Se o navegador estiver aberto, você pode interagir com ele.
     4. **Conciso e Direto**: Respostas de voz extremamente curtas (4-8 segundos). Sem "enchimento".
@@ -983,6 +985,8 @@ export const createLiveSession = (
         onStopAlarmCommand: () => void;
         onUpdateUserPreferencesCommand: (prefs: { themeColor?: string; assistantName?: string; userName?: string }) => void;
         onRpaCommand: (command: string, args: any) => Promise<any>;
+        onWebCommand?: (command: string, args: any) => Promise<any>;
+        onSkyvernCommand?: (args: any) => Promise<any>;
         onSessionReady: (session: any) => void;
         onAudioInputActivity?: () => void;
         onExternalIntegrationCommand?: (name: string, args: any) => Promise<any>;
@@ -1061,7 +1065,14 @@ const liveFunctionDeclarations = [
     navigateBrowserFunctionDeclaration,
     closeBrowserFunctionDeclaration,
     runRpaWorkflowFunctionDeclaration,
-    generateAndRunRpaFunctionDeclaration
+    generateAndRunRpaFunctionDeclaration,
+    inspectBrowserPageFunctionDeclaration,
+    interactWithBrowserFunctionDeclaration,
+    scrollPageFunctionDeclaration,
+    readPageFunctionDeclaration,
+    searchWebFunctionDeclaration,
+    extractPageFunctionDeclaration,
+    tarefaAutonomaFunctionDeclaration
 ];
 
     if (integrations?.openClaw?.enabled) liveFunctionDeclarations.push(callOpenClawFunctionDeclaration);
@@ -1200,6 +1211,14 @@ const liveFunctionDeclarations = [
                             case 'hoverElement':
                             case 'waitForElement':
                                 res = await callbacks.onRpaCommand(fc.name, fc.args);
+                                break;
+                            case 'ler_pagina':
+                            case 'pesquisar':
+                            case 'extrair':
+                                res = callbacks.onWebCommand ? await callbacks.onWebCommand(fc.name, fc.args) : { error: 'Web indisponível.' };
+                                break;
+                            case 'tarefa_autonoma':
+                                res = callbacks.onSkyvernCommand ? await callbacks.onSkyvernCommand(fc.args) : { error: 'Skyvern indisponível.' };
                                 break;
                         }
                         sessionPromise.then(s => s.sendToolResponse({ functionResponses: [{ id: fc.id, name: fc.name, response: res }] }));
