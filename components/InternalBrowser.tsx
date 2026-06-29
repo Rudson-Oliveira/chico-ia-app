@@ -51,6 +51,9 @@ const InternalBrowser = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  // Digitação direta fluida: fila para preservar a ordem das teclas + screenshot com debounce.
+  const keyQueueRef = useRef<Promise<any>>(Promise.resolve());
+  const shotDebounceRef = useRef<number | null>(null);
 
   // ResizeObserver to sync canvas with container
   useEffect(() => {
@@ -158,22 +161,33 @@ const InternalBrowser = ({
     }
   };
 
+  // Atualiza a tela ~250ms após a última tecla (evita travar a cada caractere).
+  const refreshShotDebounced = () => {
+    if (shotDebounceRef.current) window.clearTimeout(shotDebounceRef.current);
+    shotDebounceRef.current = window.setTimeout(async () => {
+      try {
+        const res = await rpaClient.screenshot();
+        if (res.ok && res.screenshot) setShot(res.screenshot);
+      } catch { /* ignore */ }
+    }, 250);
+  };
+
   // Encaminha digitação do usuário (com foco na imagem) para o foco atual do Chromium.
-  const handleImageKeyDown = async (e: React.KeyboardEvent) => {
+  // As teclas são enfileiradas (mantém a ordem) e enviadas sem bloquear a UI; a tela
+  // é re-capturada com debounce. Resultado: digitação direta fluida, sem lag por tecla.
+  const handleImageKeyDown = (e: React.KeyboardEvent) => {
     if (rpaMode !== 'server') return;
     const special: Record<string, string> = {
       Enter: 'Enter', Backspace: 'Backspace', Tab: 'Tab', Escape: 'Escape',
       ArrowUp: 'ArrowUp', ArrowDown: 'ArrowDown', ArrowLeft: 'ArrowLeft', ArrowRight: 'ArrowRight', Delete: 'Delete',
     };
-    if (e.key in special) {
-      e.preventDefault();
-      setServerBusy(true);
-      try { applyResult(await rpaClient.pressKey(special[e.key])); } finally { setServerBusy(false); }
-    } else if (e.key.length === 1) {
-      e.preventDefault();
-      setServerBusy(true);
-      try { applyResult(await rpaClient.type(e.key)); } finally { setServerBusy(false); }
-    }
+    const isSpecial = e.key in special;
+    if (!isSpecial && e.key.length !== 1) return; // ignora modificadores isolados (Shift, Ctrl...)
+    e.preventDefault();
+    keyQueueRef.current = keyQueueRef.current
+      .then(() => (isSpecial ? rpaClient.pressKey(special[e.key]) : rpaClient.type(e.key)))
+      .catch(() => { /* ignore */ });
+    refreshShotDebounced();
   };
 
   // Handle drawing on canvas from agent/rpa
