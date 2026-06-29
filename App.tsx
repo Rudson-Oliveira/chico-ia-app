@@ -541,7 +541,9 @@ export const App: React.FC<AppProps> = ({ user, initialUserData, onApplyTheme })
       const url = String(args?.url || '').trim();
       const { skyvernClient } = await import('./services/skyvernClient');
 
-      const run = await skyvernClient.run(objetivo, url ? (url.startsWith('http') ? url : `https://${url}`) : undefined);
+      // Orienta o Skyvern a devolver os dados extraídos como output estruturado.
+      const objetivoComExtracao = `${objetivo}\n\nIMPORTANTE: ao concluir, RETORNE os dados solicitados de forma estruturada (JSON) como resultado/output final da tarefa.`;
+      const run = await skyvernClient.run(objetivoComExtracao, url ? (url.startsWith('http') ? url : `https://${url}`) : undefined);
       if (!run.ok || !run.taskId) {
         return { success: false, message: run.message || run.error || 'Não foi possível iniciar a tarefa autônoma.' };
       }
@@ -559,8 +561,16 @@ export const App: React.FC<AppProps> = ({ user, initialUserData, onApplyTheme })
 
       if (!final.ok) return { success: false, message: final.message || final.error || 'Falha ao acompanhar a tarefa.' };
       if (final.status === 'completed') {
-        const out = final.output ? `\n\nResultado:\n${typeof final.output === 'string' ? final.output : JSON.stringify(final.output, null, 2)}` : '';
-        return { success: true, message: `Tarefa autônoma concluída com sucesso.${out}` };
+        if (final.output) {
+          const out = typeof final.output === 'string' ? final.output : JSON.stringify(final.output, null, 2);
+          return { success: true, message: `Tarefa autônoma concluída com sucesso.\n\nResultado:\n${out}` };
+        }
+        // Concluiu, mas o Skyvern não retornou dado estruturado: aponta a gravação/painel.
+        const link = run.appUrl || final.appUrl || final.recordingUrl;
+        return {
+          success: true,
+          message: `Tarefa autônoma concluída com sucesso.${link ? `\nO Skyvern não retornou um dado estruturado; veja a execução/resultado em: ${link}` : ' (sem dado estruturado de retorno)'}`,
+        };
       }
       const reason = final.failureReason ? `\nMotivo: ${final.failureReason}` : '';
       return { success: true, message: `Tarefa autônoma finalizou com status "${final.status}".${reason}${final.message ? `\n${final.message}` : ''}` };

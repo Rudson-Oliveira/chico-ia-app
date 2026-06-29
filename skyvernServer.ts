@@ -143,10 +143,11 @@ export function mountSkyvernRoutes(app: Express) {
         ok: true,
         status,
         done: TERMINAL_STATUSES.has(status),
-        output: data.output ?? null,
+        output: data.output ?? data.extracted_information ?? null,
         failureReason: data.failure_reason ?? null,
         stepCount: data.step_count ?? null,
         appUrl: data.app_url,
+        recordingUrl: data.recording_url ?? null,
       });
     } catch (e: any) {
       const httpStatus = e?.response?.status;

@@ -23,6 +23,7 @@ export interface SkyvernStatusResponse {
   failureReason?: string | null;
   stepCount?: number | null;
   appUrl?: string;
+  recordingUrl?: string | null;
   error?: string;
   message?: string;
 }
