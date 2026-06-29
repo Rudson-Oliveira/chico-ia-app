@@ -41,12 +41,14 @@ const TERMINAL_STATUSES = new Set([
   'canceled',
 ]);
 
-function skyvernKey(): string {
-  return (process.env.SKYVERN_API_KEY || '').trim();
+function skyvernKey(req?: Request): string {
+  // Prioridade: chave enviada pelo usuário (header) > variável de ambiente.
+  const fromHeader = req ? (req.header('x-skyvern-key') || '') : '';
+  return (fromHeader || process.env.SKYVERN_API_KEY || '').trim();
 }
 
-function hasSkyvern(): boolean {
-  return skyvernKey().length > 0;
+function hasSkyvern(req?: Request): boolean {
+  return skyvernKey(req).length > 0;
 }
 
 function isHttpUrl(u: string): boolean {
@@ -58,9 +60,9 @@ function isHttpUrl(u: string): boolean {
   }
 }
 
-function skyvernHeaders() {
+function skyvernHeaders(req?: Request) {
   return {
-    'x-api-key': skyvernKey(),
+    'x-api-key': skyvernKey(req),
     'Content-Type': 'application/json',
   };
 }
@@ -70,8 +72,8 @@ export function mountSkyvernRoutes(app: Express) {
   router.use(express.json({ limit: '2mb' }));
 
   // Sem chave -> 503 amigavel em todas as rotas.
-  router.use((_req: Request, res: Response, next) => {
-    if (!hasSkyvern()) {
+  router.use((req: Request, res: Response, next) => {
+    if (!hasSkyvern(req)) {
       return res.status(503).json({
         ok: false,
         available: false,
@@ -99,7 +101,7 @@ export function mountSkyvernRoutes(app: Express) {
 
     try {
       const r = await axios.post(`${SKYVERN_BASE}/v1/run/tasks`, body, {
-        headers: skyvernHeaders(),
+        headers: skyvernHeaders(req),
         timeout: SKYVERN_TIMEOUT_MS,
       });
       const data = r.data || {};
@@ -131,7 +133,7 @@ export function mountSkyvernRoutes(app: Express) {
 
     try {
       const r = await axios.get(`${SKYVERN_BASE}/v1/runs/${encodeURIComponent(taskId)}`, {
-        headers: skyvernHeaders(),
+        headers: skyvernHeaders(req),
         timeout: SKYVERN_TIMEOUT_MS,
       });
       const data = r.data || {};

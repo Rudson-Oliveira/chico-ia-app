@@ -57,13 +57,21 @@ function webUrl(path: string): string {
   return `${getProxyBase()}/api/web${path}`;
 }
 
+function userFirecrawlKey(): string {
+  try { return (localStorage.getItem('userFirecrawlKey') || '').trim(); } catch { return ''; }
+}
+
 async function post<T>(path: string, body: any): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Visitor-Id': getVisitorId(),
+  };
+  // Chave do usuario (Configuracoes) tem prioridade sobre a do servidor.
+  const fcKey = userFirecrawlKey();
+  if (fcKey) headers['X-Firecrawl-Key'] = fcKey;
   const res = await fetch(webUrl(path), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Visitor-Id': getVisitorId(),
-    },
+    headers,
     body: JSON.stringify(body),
   });
   try {

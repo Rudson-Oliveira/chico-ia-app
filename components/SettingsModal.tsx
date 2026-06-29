@@ -25,6 +25,10 @@ interface SettingsModalProps {
     userApiKey?: string;
     onSaveApiKey?: (key: string) => void;
     validateApiKey?: (key: string) => Promise<{ valid: boolean; message?: string }>;
+    userFirecrawlKey?: string;
+    userSkyvernKey?: string;
+    onSaveFirecrawlKey?: (key: string) => void;
+    onSaveSkyvernKey?: (key: string) => void;
     onOpenArchived: () => void;
     onOpenFocoFlow: () => void;
 }
@@ -52,16 +56,26 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     userApiKey,
     onSaveApiKey,
     validateApiKey,
+    userFirecrawlKey,
+    userSkyvernKey,
+    onSaveFirecrawlKey,
+    onSaveSkyvernKey,
     onOpenArchived,
     onOpenFocoFlow
 }) => {
     const [keyDraft, setKeyDraft] = React.useState(userApiKey || '');
     const [keyStatus, setKeyStatus] = React.useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
     const [keyMsg, setKeyMsg] = React.useState('');
+    const [fcDraft, setFcDraft] = React.useState(userFirecrawlKey || '');
+    const [skDraft, setSkDraft] = React.useState(userSkyvernKey || '');
+    const [svcMsg, setSvcMsg] = React.useState('');
 
     React.useEffect(() => {
-        if (isOpen) { setKeyDraft(userApiKey || ''); setKeyStatus('idle'); setKeyMsg(''); }
-    }, [isOpen, userApiKey]);
+        if (isOpen) {
+            setKeyDraft(userApiKey || ''); setKeyStatus('idle'); setKeyMsg('');
+            setFcDraft(userFirecrawlKey || ''); setSkDraft(userSkyvernKey || ''); setSvcMsg('');
+        }
+    }, [isOpen, userApiKey, userFirecrawlKey, userSkyvernKey]);
 
     const handleSaveKey = async () => {
         const k = keyDraft.trim();
@@ -148,6 +162,55 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-xs text-[var(--accent-primary)] hover:underline mt-2 inline-block">
                             Onde pegar minha chave →
                         </a>
+                    </div>
+
+                    {/* Service Keys: Firecrawl + Skyvern */}
+                    <div className="bg-[var(--bg-primary)] p-4 rounded-lg border border-[var(--border-color)] space-y-3">
+                        <label className="block text-sm text-[var(--text-secondary)] font-bold">Chaves de Serviços Web</label>
+                        <p className="text-xs text-[var(--text-secondary)]">Opcional. Use suas próprias chaves para leitura/busca web (Firecrawl) e automação autônoma (Skyvern). Ficam salvas neste navegador.</p>
+
+                        <div>
+                            <label className="block text-xs mb-1 text-[var(--text-secondary)]">Firecrawl (leitura/busca web)</label>
+                            <div className="flex gap-2">
+                                <input
+                                    type="password"
+                                    value={fcDraft}
+                                    onChange={e => { setFcDraft(e.target.value); setSvcMsg(''); }}
+                                    placeholder="fc-..."
+                                    aria-label="Chave Firecrawl"
+                                    autoComplete="off"
+                                    className="flex-1 p-2 rounded bg-[var(--bg-secondary)] border border-[var(--border-color)] text-[var(--text-primary)] text-sm focus:outline-none focus:border-[var(--accent-primary)]"
+                                />
+                                <button
+                                    onClick={() => { onSaveFirecrawlKey?.(fcDraft.trim()); setSvcMsg(fcDraft.trim() ? 'Firecrawl salva! ✓' : 'Firecrawl removida.'); }}
+                                    className="px-3 py-2 bg-[var(--accent-primary)] text-[var(--accent-primary-text)] rounded text-sm font-bold hover:opacity-90 transition-opacity whitespace-nowrap"
+                                >
+                                    Salvar
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs mb-1 text-[var(--text-secondary)]">Skyvern (automação autônoma)</label>
+                            <div className="flex gap-2">
+                                <input
+                                    type="password"
+                                    value={skDraft}
+                                    onChange={e => { setSkDraft(e.target.value); setSvcMsg(''); }}
+                                    placeholder="Token Skyvern (x-api-key)"
+                                    aria-label="Chave Skyvern"
+                                    autoComplete="off"
+                                    className="flex-1 p-2 rounded bg-[var(--bg-secondary)] border border-[var(--border-color)] text-[var(--text-primary)] text-sm focus:outline-none focus:border-[var(--accent-primary)]"
+                                />
+                                <button
+                                    onClick={() => { onSaveSkyvernKey?.(skDraft.trim()); setSvcMsg(skDraft.trim() ? 'Skyvern salva! ✓' : 'Skyvern removida.'); }}
+                                    className="px-3 py-2 bg-[var(--accent-primary)] text-[var(--accent-primary-text)] rounded text-sm font-bold hover:opacity-90 transition-opacity whitespace-nowrap"
+                                >
+                                    Salvar
+                                </button>
+                            </div>
+                        </div>
+                        {svcMsg && <p className="text-xs text-[var(--success-color)]">{svcMsg}</p>}
                     </div>
 
                     {/* Personalization Section */}

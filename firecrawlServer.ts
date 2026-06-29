@@ -22,12 +22,14 @@ import { readPageText } from './rpaServer';
 const FIRECRAWL_BASE = 'https://api.firecrawl.dev';
 const FIRECRAWL_TIMEOUT_MS = 30000;
 
-function firecrawlKey(): string {
-  return (process.env.FIRECRAWL_API_KEY || '').trim();
+function firecrawlKey(req?: Request): string {
+  // Prioridade: chave enviada pelo usuário (header) > variável de ambiente.
+  const fromHeader = req ? (req.header('x-firecrawl-key') || '') : '';
+  return (fromHeader || process.env.FIRECRAWL_API_KEY || '').trim();
 }
 
-function hasFirecrawl(): boolean {
-  return firecrawlKey().length > 0;
+function hasFirecrawl(req?: Request): boolean {
+  return firecrawlKey(req).length > 0;
 }
 
 function visitorIdOf(req: Request): string {
@@ -44,10 +46,10 @@ function isHttpUrl(u: string): boolean {
   }
 }
 
-async function firecrawlPost(path: string, body: any): Promise<any> {
+async function firecrawlPost(path: string, body: any, key: string): Promise<any> {
   const res = await axios.post(`${FIRECRAWL_BASE}${path}`, body, {
     headers: {
-      Authorization: `Bearer ${firecrawlKey()}`,
+      Authorization: `Bearer ${key}`,
       'Content-Type': 'application/json',
     },
     timeout: FIRECRAWL_TIMEOUT_MS,
@@ -56,8 +58,8 @@ async function firecrawlPost(path: string, body: any): Promise<any> {
 }
 
 // Tenta o Firecrawl scrape (markdown). Lanca em erro/timeout/sem conteudo.
-async function firecrawlScrape(url: string): Promise<{ markdown: string; title?: string }> {
-  const data = await firecrawlPost('/v1/scrape', { url, formats: ['markdown'] });
+async function firecrawlScrape(url: string, key: string): Promise<{ markdown: string; title?: string }> {
+  const data = await firecrawlPost('/v1/scrape', { url, formats: ['markdown'] }, key);
   const markdown = data?.data?.markdown ?? data?.markdown ?? '';
   if (!markdown || !String(markdown).trim()) {
     throw new Error('firecrawl: conteudo vazio');
@@ -75,9 +77,10 @@ export function mountWebRoutes(app: Express) {
     const url = String(req.body?.url || '').trim();
     if (!isHttpUrl(url)) return res.status(400).json({ ok: false, error: 'URL http/https inválida' });
 
-    if (hasFirecrawl()) {
+    const readKey = firecrawlKey(req);
+    if (readKey) {
       try {
-        const { markdown, title } = await firecrawlScrape(url);
+        const { markdown, title } = await firecrawlScrape(url, readKey);
         console.log(`[web/read] source=firecrawl url=${url}`);
         return res.json({ ok: true, source: 'firecrawl', markdown, title, url });
       } catch (e: any) {
@@ -104,7 +107,8 @@ export function mountWebRoutes(app: Express) {
   router.post('/search', async (req: Request, res: Response) => {
     const query = String(req.body?.query || '').trim();
     if (!query) return res.status(400).json({ ok: false, error: 'query obrigatória' });
-    if (!hasFirecrawl()) {
+    const searchKey = firecrawlKey(req);
+    if (!searchKey) {
       return res.status(503).json({
         ok: false,
         error: 'firecrawl_indisponivel',
@@ -113,7 +117,7 @@ export function mountWebRoutes(app: Express) {
     }
     try {
       const limit = Math.min(Math.max(Number(req.body?.limit) || 5, 1), 20);
-      const data = await firecrawlPost('/v1/search', { query, limit });
+      const data = await firecrawlPost('/v1/search', { query, limit }, searchKey);
       const raw: any[] = data?.data || data?.results || [];
       const results = raw.map((r: any) => ({
         title: r.title || r.metadata?.title || '',
@@ -138,7 +142,8 @@ export function mountWebRoutes(app: Express) {
   router.post('/extract', async (req: Request, res: Response) => {
     const url = String(req.body?.url || '').trim();
     if (!isHttpUrl(url)) return res.status(400).json({ ok: false, error: 'URL http/https inválida' });
-    if (!hasFirecrawl()) {
+    const extractKey = firecrawlKey(req);
+    if (!extractKey) {
       return res.status(503).json({
         ok: false,
         error: 'firecrawl_indisponivel',
@@ -153,7 +158,7 @@ export function mountWebRoutes(app: Express) {
       if (prompt) jsonOptions.prompt = prompt;
       const body: any = { url, formats: ['json'] };
       if (Object.keys(jsonOptions).length) body.jsonOptions = jsonOptions;
-      const data = await firecrawlPost('/v1/scrape', body);
+      const data = await firecrawlPost('/v1/scrape', body, extractKey);
       const extracted = data?.data?.json ?? data?.json ?? data?.data ?? null;
       const title = data?.data?.metadata?.title || data?.metadata?.title || undefined;
       console.log(`[web/extract] source=firecrawl url=${url}`);

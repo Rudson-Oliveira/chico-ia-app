@@ -31,10 +31,18 @@ function skyvernUrl(path: string): string {
   return `${getProxyBase()}/api/skyvern${path}`;
 }
 
+function userSkyvernKey(): string {
+  try { return (localStorage.getItem('userSkyvernKey') || '').trim(); } catch { return ''; }
+}
+
 async function request<T>(path: string, method: 'GET' | 'POST', body?: any): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  // Chave do usuario (Configuracoes) tem prioridade sobre a do servidor.
+  const skKey = userSkyvernKey();
+  if (skKey) headers['X-Skyvern-Key'] = skKey;
   const res = await fetch(skyvernUrl(path), {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   try {

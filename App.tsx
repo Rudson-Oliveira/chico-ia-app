@@ -253,6 +253,18 @@ export const App: React.FC<AppProps> = ({ user, initialUserData, onApplyTheme })
     setGeminiUserApiKey(trimmed);
   }, []);
 
+  // Chaves de servicos backend (Firecrawl/Skyvern): o usuario informa em
+  // Configuracoes; o cliente as envia via header e o backend prefere o header.
+  const [userFirecrawlKey, setUserFirecrawlKeyState] = useState<string>(() => localStorage.getItem('userFirecrawlKey') || '');
+  const [userSkyvernKey, setUserSkyvernKeyState] = useState<string>(() => localStorage.getItem('userSkyvernKey') || '');
+  const saveServiceKey = useCallback((storageKey: 'userFirecrawlKey' | 'userSkyvernKey', value: string) => {
+    const trimmed = (value || '').trim();
+    if (trimmed) localStorage.setItem(storageKey, trimmed);
+    else localStorage.removeItem(storageKey);
+    if (storageKey === 'userFirecrawlKey') setUserFirecrawlKeyState(trimmed);
+    else setUserSkyvernKeyState(trimmed);
+  }, []);
+
   // Settings & Profile State
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isFocoFlowModalOpen, setIsFocoFlowModalOpen] = useState(false);
@@ -3054,6 +3066,10 @@ export const App: React.FC<AppProps> = ({ user, initialUserData, onApplyTheme })
           userApiKey={userApiKey || ''}
           onSaveApiKey={saveUserApiKey}
           validateApiKey={validateApiKey}
+          userFirecrawlKey={userFirecrawlKey}
+          userSkyvernKey={userSkyvernKey}
+          onSaveFirecrawlKey={(k: string) => saveServiceKey('userFirecrawlKey', k)}
+          onSaveSkyvernKey={(k: string) => saveServiceKey('userSkyvernKey', k)}
           onOpenArchived={() => { setIsSettingsModalOpen(false); setIsArchivedModalOpen(true); }}
           onOpenFocoFlow={() => { setIsSettingsModalOpen(false); setIsFocoFlowModalOpen(true); }}
       />
