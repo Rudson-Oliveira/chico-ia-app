@@ -402,8 +402,9 @@ const InternalBrowser = ({
 
       {/* Browser Content */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Sidebar */}
-        <div className="w-64 bg-[#1a1a1a] border-r border-[#333] flex flex-col hidden lg:flex">
+        {/* Sidebar decorativo removido para dar largura total ao navegador (era um menu
+            fake hardcoded, sem função real; o chat continua acessível pelo ícone na barra). */}
+        <div className="hidden">
           <div className="p-6 flex flex-col items-center border-b border-[#333]">
              <div className="w-full mb-6">
                 <img src="https://hospitalarsaude.com.br/wp-content/uploads/2021/05/logo-hospitalar-saude.png" alt="Hospitalar" className="h-12 object-contain mx-auto" referrerPolicy="no-referrer" />

@@ -1,89 +1,77 @@
-const CACHE_NAME = 'gideao-ia-cache-v1';
-const urlsToCache = [
-  '/',
-  '/index.html',
-  // O bundle JavaScript gerado de index.tsx será cacheado automaticamente pelo service worker
-  // assim que ele for baixado pelo navegador. Para garantir que as fontes e CSS sejam cacheados,
-  // também adicionamos os URLs aqui.
-  'https://cdn.tailwindcss.com',
-  'https://fonts.googleapis.com',
-  'https://fonts.gstatic.com',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap',
-  // Adicione caminhos para seus ícones PWA aqui (ex: '/icons/icon-192x192.png')
-  // Para fins de demonstração, assumimos que os ícones estarão na pasta /icons
-  '/icons/icon-72x72.png',
-  '/icons/icon-96x96.png',
-  '/icons/icon-128x128.png',
-  '/icons/icon-144x144.png',
-  '/icons/icon-152x152.png',
-  '/icons/icon-192x192.png',
-  '/icons/icon-384x384.png',
-  '/icons/icon-512x512.png'
-];
+// Service Worker do Chico IA.
+//
+// Estratégia (evita o usuário ficar preso em versão antiga após deploy):
+//  - HTML / navegação  -> network-first: sempre busca o index.html novo (que aponta
+//    para o bundle JS/CSS mais recente); cai para o cache só se estiver offline.
+//  - Demais assets same-origin (JS/CSS com hash, imagens) -> stale-while-revalidate:
+//    responde rápido do cache e atualiza em segundo plano.
+//  - Requisições a /api e /proxy NÃO são cacheadas (dados dinâmicos / backend).
+//  - skipWaiting + clients.claim: a nova versão assume imediatamente.
+//
+// Bump o sufixo de CACHE_NAME a cada mudança estrutural para invalidar caches antigos.
+const CACHE_NAME = 'chico-ia-cache-v2';
+const PRECACHE = ['/', '/index.html'];
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('Service Worker: Cache aberto durante a instalação.');
-        return cache.addAll(urlsToCache);
-      })
-      .catch((error) => {
-        console.error('Service Worker: Falha ao adicionar URLs ao cache durante a instalação:', error);
-      })
+    caches.open(CACHE_NAME).then((cache) =>
+      // allSettled: não falha a instalação se algum recurso não existir.
+      Promise.allSettled(PRECACHE.map((u) => cache.add(u)))
+    )
+  );
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    (async () => {
+      const names = await caches.keys();
+      await Promise.all(names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n)));
+      await self.clients.claim();
+    })()
   );
 });
 
 self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Cache hit - return response
-        if (response) {
-          return response;
-        }
+  const req = event.request;
+  if (req.method !== 'GET') return;
 
-        // Importante: Clonar a requisição. Uma requisição é um stream e só pode ser consumida uma vez.
-        const fetchRequest = event.request.clone();
+  const url = new URL(req.url);
+  // Não interfere em cross-origin (APIs externas, fontes, Gemini, etc.).
+  if (url.origin !== self.location.origin) return;
+  // Não cacheia backend dinâmico.
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/proxy')) return;
 
-        return fetch(fetchRequest).then(
-          (response) => {
-            // Verifica se recebemos uma resposta válida
-            if (!response || response.status !== 200 || response.type !== 'basic' || event.request.method !== 'GET') {
-              return response;
-            }
+  const isHTML =
+    req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html');
 
-            // Importante: Clonar a resposta. Uma resposta é um stream e só pode ser consumida uma vez.
-            const responseToCache = response.clone();
-
-            caches.open(CACHE_NAME)
-              .then((cache) => {
-                cache.put(event.request, responseToCache);
-              });
-
-            return response;
-          }
-        ).catch((error) => {
-          console.error('Service Worker: Falha na requisição de rede:', error);
-          // Opcional: Retornar uma página offline personalizada em caso de falha de rede.
-          // return caches.match('/offline.html');
-        });
-      })
-    );
-});
-
-self.addEventListener('activate', (event) => {
-  const cacheWhitelist = [CACHE_NAME];
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
-            console.log('Service Worker: Deletando cache antigo:', cacheName);
-            return caches.delete(cacheName);
-          }
+  if (isHTML) {
+    // network-first
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE_NAME).then((c) => c.put('/index.html', copy)).catch(() => {});
+          return res;
         })
-      );
+        .catch(() => caches.match(req).then((r) => r || caches.match('/index.html')))
+    );
+    return;
+  }
+
+  // stale-while-revalidate
+  event.respondWith(
+    caches.match(req).then((cached) => {
+      const network = fetch(req)
+        .then((res) => {
+          if (res && res.status === 200 && res.type === 'basic') {
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(req, copy)).catch(() => {});
+          }
+          return res;
+        })
+        .catch(() => cached);
+      return cached || network;
     })
   );
 });
