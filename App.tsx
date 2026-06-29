@@ -305,6 +305,19 @@ export const App: React.FC<AppProps> = ({ user, initialUserData, onApplyTheme })
         case 'closeBrowser':
           setIsBrowserOpen(false);
           return { success: true, message: "Navegador fechado." };
+        case 'navigateBrowser': {
+          let target = String(args?.url || '').trim();
+          if (!target) return { success: false, message: "URL não informada." };
+          if (!/^https?:\/\//i.test(target)) target = `https://${target}`;
+          const wasOpen = isBrowserOpen;
+          if (!wasOpen) setIsBrowserOpen(true);
+          // Espera o navegador montar + detectar o modo (server/iframe) antes de navegar.
+          const delayMs = wasOpen ? 300 : 1600;
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('agent-navigate', { detail: { url: target } }));
+          }, delayMs);
+          return { success: true, message: `Navegando o navegador interno para ${target}.` };
+        }
         case 'runRpaWorkflow':
           if (!isBrowserOpen) setIsBrowserOpen(true);
           setIsRpaRunning(true);
@@ -2549,7 +2562,7 @@ export const App: React.FC<AppProps> = ({ user, initialUserData, onApplyTheme })
                   } else if (fc.name === 'callOpenClaw' || fc.name === 'callOllama' || fc.name === 'callClaudeCode') {
                       const res = await handleExternalIntegrationCommand(fc.name, fc.args);
                       addMessage('system', `Resposta de ${fc.name.replace('call', '')}:\n${res.result || res.error}`);
-                  } else if (fc.name === 'openBrowser' || fc.name === 'closeBrowser' || fc.name === 'runRpaWorkflow' || fc.name === 'generateAndRunRpa') {
+                  } else if (fc.name === 'openBrowser' || fc.name === 'navigateBrowser' || fc.name === 'closeBrowser' || fc.name === 'runRpaWorkflow' || fc.name === 'generateAndRunRpa') {
                       const res = await handleRpaCommand(fc.name, fc.args);
                       addMessage('system', res.message || res.error || "Ação RPA concluída.");
                   } else if (fc.name === 'ler_pagina' || fc.name === 'pesquisar' || fc.name === 'extrair') {

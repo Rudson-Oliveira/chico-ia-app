@@ -222,6 +222,21 @@ const InternalBrowser = ({
     return () => window.removeEventListener('agent-draw', handleDraw);
   }, []);
 
+  // Navegação disparada pelo agente (função navigateBrowser). Espelha handleNavigate:
+  // atualiza a URL e, no modo server, navega o Chromium; no modo iframe, o src segue `url`.
+  useEffect(() => {
+    const handleAgentNavigate = (e: any) => {
+      let target = String(e?.detail?.url || '').trim();
+      if (!target) return;
+      if (!target.startsWith('http')) target = `https://${target}`;
+      setUrl(target);
+      setInputUrl(target);
+      if (rpaMode === 'server') void runServerNavigate(target);
+    };
+    window.addEventListener('agent-navigate', handleAgentNavigate);
+    return () => window.removeEventListener('agent-navigate', handleAgentNavigate);
+  }, [rpaMode]);
+
   useEffect(() => {
     if (chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' });

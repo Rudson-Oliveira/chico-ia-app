@@ -350,6 +350,18 @@ const openBrowserFunctionDeclaration: FunctionDeclaration = {
   description: 'Abre o navegador interno (Vision AI) para automação RPA e visualização.'
 };
 
+const navigateBrowserFunctionDeclaration: FunctionDeclaration = {
+  name: 'navigateBrowser',
+  description: 'Abre o navegador interno (se necessário) e NAVEGA até a URL/site informado. Use SEMPRE que o usuário pedir para entrar/abrir/acessar um site específico (ex.: "abre o Google"). Não diga que abriu sem chamar esta função.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      url: { type: Type.STRING, description: "URL ou domínio do site (ex.: 'https://www.google.com' ou 'google.com')." }
+    },
+    required: ['url']
+  }
+};
+
 const closeBrowserFunctionDeclaration: FunctionDeclaration = {
   name: 'closeBrowser',
   parameters: { type: Type.OBJECT, properties: {} },
@@ -668,7 +680,7 @@ export const baseSystemInstruction = `
        - Use estas tags DENTRO do seu texto de resposta. Não apenas fale o link, use a tag.
     3. **Navegador Interno e RPA (Vision AI)**:
        - Você tem um navegador interno integrado para automação e visão.
-       - Use 'openBrowser' para abrir o navegador quando o usuário pedir para acessar um site ou realizar automação.
+       - Para ACESSAR/ENTRAR/ABRIR um site específico (ex.: "abre o Google"), use SEMPRE 'navigateBrowser' com a URL — ela já abre o navegador e navega. Use 'openBrowser' apenas para abrir o navegador sem um site definido. NUNCA afirme que abriu/acessou um site sem ter chamado 'navigateBrowser'; baseie sua resposta no resultado retornado pela função.
        - Use 'generateAndRunRpa' para realizar tarefas complexas no navegador (ex: "acesse o site X, preencha o campo Y e clique em Z").
        - Você pode "ver" o que acontece no navegador. Se o navegador estiver aberto, você pode interagir com ele.
     4. **Conciso e Direto**: Respostas de voz extremamente curtas (4-8 segundos). Sem "enchimento".
@@ -875,6 +887,7 @@ export const sendTextMessage = async (
         searchPastConversationsFunctionDeclaration,
         calculateFunctionDeclaration,
         openBrowserFunctionDeclaration,
+        navigateBrowserFunctionDeclaration,
         closeBrowserFunctionDeclaration,
         runRpaWorkflowFunctionDeclaration,
         generateAndRunRpaFunctionDeclaration,
@@ -902,7 +915,11 @@ export const sendTextMessage = async (
         });
     }
     
-    if (needsSearch) {
+    // A ferramenta nativa googleSearch NÃO pode coexistir com functionDeclarations
+    // na mesma requisição (erro da API: include_server_side_tool_invocations).
+    // Como já temos a função própria 'searchWeb'/'pesquisar' (via Firecrawl), só
+    // usamos o googleSearch nativo quando NÃO houver funções nesta requisição.
+    if (needsSearch && !needsFunctions) {
         tools.push({ googleSearch: {} });
     }
 
@@ -1041,6 +1058,7 @@ const liveFunctionDeclarations = [
     searchPastConversationsFunctionDeclaration,
     calculateFunctionDeclaration,
     openBrowserFunctionDeclaration,
+    navigateBrowserFunctionDeclaration,
     closeBrowserFunctionDeclaration,
     runRpaWorkflowFunctionDeclaration,
     generateAndRunRpaFunctionDeclaration
@@ -1171,6 +1189,7 @@ const liveFunctionDeclarations = [
                                 }
                                 break;
                             case 'openBrowser':
+                            case 'navigateBrowser':
                             case 'closeBrowser':
                             case 'runRpaWorkflow':
                             case 'generateAndRunRpa':
