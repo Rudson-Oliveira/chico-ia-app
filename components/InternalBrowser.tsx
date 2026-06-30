@@ -421,13 +421,27 @@ const InternalBrowser = ({
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
           </button>
 
-          <button 
-            onClick={() => setIsInteractionMode(!isInteractionMode)}
-            className={`p-2 rounded-lg transition-all ${isInteractionMode ? 'bg-[#4CAF50] text-white shadow-[0_0_15px_rgba(76,175,80,0.5)]' : 'hover:bg-[#333] text-gray-400'}`}
-            title={isInteractionMode ? "Modo Interação Ativo" : "Modo Interação Inativo"}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5" /></svg>
-          </button>
+          {/* Modo server (Playwright): a interação está SEMPRE ativa (textarea sobreposto
+              captura clique+teclado). Mostra um indicador estático para o usuário saber que
+              pode clicar e digitar direto. O toggle só existe no modo iframe local, onde ele
+              de fato liga/desliga a camada de cliques. */}
+          {rpaMode === 'server' && (
+            <div
+              title="Interação ativa — clique e digite direto na tela"
+              className="p-2 rounded-lg bg-[#4CAF50]/20 text-[#4CAF50] flex items-center"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5" /></svg>
+            </div>
+          )}
+          {rpaMode === 'iframe' && (
+            <button
+              onClick={() => setIsInteractionMode(!isInteractionMode)}
+              className={`p-2 rounded-lg transition-all ${isInteractionMode ? 'bg-[#4CAF50] text-white shadow-[0_0_15px_rgba(76,175,80,0.5)]' : 'hover:bg-[#333] text-gray-400'}`}
+              title={isInteractionMode ? "Modo Interação Ativo" : "Modo Interação Inativo (clique para ativar e poder digitar)"}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5" /></svg>
+            </button>
+          )}
 
           <div className="flex bg-[#1a1a1a] rounded-lg p-1 border border-[#333]">
             <button 
