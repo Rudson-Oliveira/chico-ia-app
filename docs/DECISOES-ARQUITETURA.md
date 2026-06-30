@@ -49,6 +49,22 @@ Registro das decisões tomadas (e o porquê), para não serem revertidas por eng
   `/api` e `/proxy`, `skipWaiting` + `clients.claim`, limpa caches antigos (cache `v2`).
   Motivo: o SW antigo era cache-first em tudo (servia index.html velho → usuário preso em versão antiga).
 
+## 6b. OpenRouter como economia/fallback de LLM (texto)
+- Os modelos do Chico já são todos **Flash/Flash-Lite** (os mais baratos do Gemini) — não há
+  Pro a "rebaixar". O custo real em escala é a **voz (Live API)**, não o texto.
+- OpenRouter entra como **plano B de texto**: BYO key + modelo em ⚙️ Configurações
+  (`setOpenRouterConfig`, localStorage `userOpenRouterKey`/`userOpenRouterModel`). Se a chamada
+  de texto do Gemini falhar (após retries), `sendTextMessage` cai para o OpenRouter
+  (API compatível com OpenAI, `POST /api/v1/chat/completions`) — **somente texto, sem function
+  calling** nessa rota. Voz/Live, visão e imagem permanecem no Gemini (OpenRouter não faz voz
+  em tempo real). Modelo padrão: `deepseek/deepseek-chat` (configurável).
+
+## 6c. n8n ↔ Skyvern + Firecrawl (plano B / redundância)
+- Em `integrations/n8n/` há workflows importáveis (webhook → HTTP) que chamam os mesmos
+  endpoints que o Chico usa: Firecrawl (`/v1/search`, `/v1/scrape`) e Skyvern (`/v1/run/tasks`).
+  Chaves NÃO ficam nos arquivos (credencial Header Auth criada pelo usuário no n8n). Hoje é só
+  redundância disponível; para o Chico cair no n8n, ligar um `fetch` no `catch` dos servidores.
+
 ## 7. Deploy
 - Produção pplx builda do workspace do Perplexity (cópia separada do GitHub). Para deploy
   independente **completo** (com RPA Playwright), usar **host Node** via `Dockerfile`

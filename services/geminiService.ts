@@ -21,6 +21,39 @@ const getApiKey = (): string => {
   return userProvidedApiKey || process.env.GEMINI_API_KEY || process.env.API_KEY || "";
 };
 
+// OpenRouter (economia/fallback): se o Gemini falhar numa resposta de TEXTO, reusa o
+// OpenRouter (API compatível com OpenAI) como plano B. Voz/Live, visão e imagem seguem
+// no Gemini (OpenRouter não faz voz em tempo real). Configurado em ⚙️ Configurações.
+let userOpenRouterKey = '';
+let userOpenRouterModel = '';
+export const setOpenRouterConfig = (key?: string | null, model?: string | null): void => {
+  userOpenRouterKey = (key || '').trim();
+  if (model !== undefined) userOpenRouterModel = (model || '').trim();
+};
+const getOpenRouterModel = (): string => userOpenRouterModel || 'deepseek/deepseek-chat';
+
+// Converte os contents do Gemini -> mensagens OpenAI (apenas texto) e chama o OpenRouter.
+async function openRouterTextFallback(systemInstruction: string, contents: any[]): Promise<string> {
+  const messages: { role: string; content: string }[] = [];
+  if (systemInstruction) messages.push({ role: 'system', content: systemInstruction });
+  for (const turn of contents || []) {
+    const role = turn?.role === 'model' ? 'assistant' : 'user';
+    const text = (turn?.parts || [])
+      .map((p: any) => (typeof p?.text === 'string' ? p.text : ''))
+      .filter(Boolean)
+      .join('\n');
+    if (text) messages.push({ role, content: text });
+  }
+  const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${userOpenRouterKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: getOpenRouterModel(), messages }),
+  });
+  if (!resp.ok) throw new Error(`OpenRouter ${resp.status}: ${await resp.text().catch(() => '')}`);
+  const data = await resp.json();
+  return data?.choices?.[0]?.message?.content || '';
+}
+
 export const validateApiKey = async (key: string): Promise<{ valid: boolean; message?: string }> => {
     try {
         const ai = new GoogleGenAI({ apiKey: key });
@@ -933,7 +966,7 @@ export const sendTextMessage = async (
         finalContents.push({ role: 'user', parts: currentParts });
     }
 
-    return await retryOperation(async () => {
+    const runGemini = () => retryOperation(async () => {
         console.log("Sending request to Gemini with contents:", finalContents.length, "turns", "Tools:", tools.length);
         
         try {
@@ -960,6 +993,19 @@ export const sendTextMessage = async (
             throw error;
         }
     });
+
+    try {
+        return await runGemini();
+    } catch (err) {
+        // Plano B: se o Gemini falhar e houver chave OpenRouter, responde via OpenRouter
+        // (somente texto; sem function calling nesta rota de fallback).
+        if (userOpenRouterKey) {
+            console.warn('Gemini falhou; usando OpenRouter como fallback de texto.', err);
+            const text = await openRouterTextFallback(systemInstruction, finalContents);
+            return { text, functionCalls: undefined, groundingMetadata: undefined };
+        }
+        throw err;
+    }
 };
 
 export const createLiveSession = (

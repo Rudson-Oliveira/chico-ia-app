@@ -29,6 +29,9 @@ interface SettingsModalProps {
     userSkyvernKey?: string;
     onSaveFirecrawlKey?: (key: string) => void;
     onSaveSkyvernKey?: (key: string) => void;
+    userOpenRouterKey?: string;
+    userOpenRouterModel?: string;
+    onSaveOpenRouter?: (key: string, model: string) => void;
     onOpenArchived: () => void;
     onOpenFocoFlow: () => void;
 }
@@ -60,6 +63,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     userSkyvernKey,
     onSaveFirecrawlKey,
     onSaveSkyvernKey,
+    userOpenRouterKey,
+    userOpenRouterModel,
+    onSaveOpenRouter,
     onOpenArchived,
     onOpenFocoFlow
 }) => {
@@ -68,14 +74,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     const [keyMsg, setKeyMsg] = React.useState('');
     const [fcDraft, setFcDraft] = React.useState(userFirecrawlKey || '');
     const [skDraft, setSkDraft] = React.useState(userSkyvernKey || '');
+    const [orKeyDraft, setOrKeyDraft] = React.useState(userOpenRouterKey || '');
+    const [orModelDraft, setOrModelDraft] = React.useState(userOpenRouterModel || '');
     const [svcMsg, setSvcMsg] = React.useState('');
 
     React.useEffect(() => {
         if (isOpen) {
             setKeyDraft(userApiKey || ''); setKeyStatus('idle'); setKeyMsg('');
             setFcDraft(userFirecrawlKey || ''); setSkDraft(userSkyvernKey || ''); setSvcMsg('');
+            setOrKeyDraft(userOpenRouterKey || ''); setOrModelDraft(userOpenRouterModel || '');
         }
-    }, [isOpen, userApiKey, userFirecrawlKey, userSkyvernKey]);
+    }, [isOpen, userApiKey, userFirecrawlKey, userSkyvernKey, userOpenRouterKey, userOpenRouterModel]);
 
     const handleSaveKey = async () => {
         const k = keyDraft.trim();
@@ -204,6 +213,45 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 />
                                 <button
                                     onClick={() => { onSaveSkyvernKey?.(skDraft.trim()); setSvcMsg(skDraft.trim() ? 'Skyvern salva! ✓' : 'Skyvern removida.'); }}
+                                    className="px-3 py-2 bg-[var(--accent-primary)] text-[var(--accent-primary-text)] rounded text-sm font-bold hover:opacity-90 transition-opacity whitespace-nowrap"
+                                >
+                                    Salvar
+                                </button>
+                            </div>
+                        </div>
+                        {svcMsg && <p className="text-xs text-[var(--success-color)]">{svcMsg}</p>}
+                    </div>
+
+                    {/* OpenRouter: economia/fallback de LLM (texto) */}
+                    <div className="bg-[var(--bg-primary)] p-4 rounded-lg border border-[var(--border-color)] space-y-3">
+                        <label className="block text-sm text-[var(--text-secondary)] font-bold">OpenRouter (economia / plano B)</label>
+                        <p className="text-xs text-[var(--text-secondary)]">Opcional. Se preenchido, o Chico usa o OpenRouter como <strong>fallback de texto</strong> caso o Gemini falhe (1 chave → vários modelos). Voz, visão e imagem continuam no Gemini.</p>
+                        <div>
+                            <label className="block text-xs mb-1 text-[var(--text-secondary)]">Chave OpenRouter</label>
+                            <input
+                                type="password"
+                                value={orKeyDraft}
+                                onChange={e => { setOrKeyDraft(e.target.value); setSvcMsg(''); }}
+                                placeholder="sk-or-..."
+                                aria-label="Chave OpenRouter"
+                                autoComplete="off"
+                                className="w-full p-2 rounded bg-[var(--bg-secondary)] border border-[var(--border-color)] text-[var(--text-primary)] text-sm focus:outline-none focus:border-[var(--accent-primary)]"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs mb-1 text-[var(--text-secondary)]">Modelo (opcional)</label>
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={orModelDraft}
+                                    onChange={e => { setOrModelDraft(e.target.value); setSvcMsg(''); }}
+                                    placeholder="deepseek/deepseek-chat"
+                                    aria-label="Modelo OpenRouter"
+                                    autoComplete="off"
+                                    className="flex-1 p-2 rounded bg-[var(--bg-secondary)] border border-[var(--border-color)] text-[var(--text-primary)] text-sm focus:outline-none focus:border-[var(--accent-primary)]"
+                                />
+                                <button
+                                    onClick={() => { onSaveOpenRouter?.(orKeyDraft.trim(), orModelDraft.trim()); setSvcMsg(orKeyDraft.trim() ? 'OpenRouter salvo! ✓' : 'OpenRouter removido.'); }}
                                     className="px-3 py-2 bg-[var(--accent-primary)] text-[var(--accent-primary-text)] rounded text-sm font-bold hover:opacity-90 transition-opacity whitespace-nowrap"
                                 >
                                     Salvar

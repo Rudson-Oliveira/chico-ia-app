@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { evaluate } from 'mathjs';
-import { createLiveSession, LiveSessionController, sendTextMessage, summarizeText, transcribeImage, validateApiKey, setUserApiKey as setGeminiUserApiKey } from './services/geminiService';
+import { createLiveSession, LiveSessionController, sendTextMessage, summarizeText, transcribeImage, validateApiKey, setUserApiKey as setGeminiUserApiKey, setOpenRouterConfig } from './services/geminiService';
 import { 
     createFocoFlowTask, 
     createFocoFlowTransaction, 
@@ -264,6 +264,20 @@ export const App: React.FC<AppProps> = ({ user, initialUserData, onApplyTheme })
     else localStorage.removeItem(storageKey);
     if (storageKey === 'userFirecrawlKey') setUserFirecrawlKeyState(trimmed);
     else setUserSkyvernKeyState(trimmed);
+  }, []);
+
+  // OpenRouter (economia/fallback de texto): chave + modelo opcionais, informados em
+  // Configuracoes. O geminiService usa como plano B se o Gemini falhar numa resposta.
+  const [userOpenRouterKey, setUserOpenRouterKeyState] = useState<string>(() => localStorage.getItem('userOpenRouterKey') || '');
+  const [userOpenRouterModel, setUserOpenRouterModelState] = useState<string>(() => localStorage.getItem('userOpenRouterModel') || '');
+  useEffect(() => { setOpenRouterConfig(userOpenRouterKey || '', userOpenRouterModel || ''); }, [userOpenRouterKey, userOpenRouterModel]);
+  const saveOpenRouter = useCallback((key: string, model: string) => {
+    const k = (key || '').trim();
+    const m = (model || '').trim();
+    if (k) localStorage.setItem('userOpenRouterKey', k); else localStorage.removeItem('userOpenRouterKey');
+    if (m) localStorage.setItem('userOpenRouterModel', m); else localStorage.removeItem('userOpenRouterModel');
+    setUserOpenRouterKeyState(k);
+    setUserOpenRouterModelState(m);
   }, []);
 
   // Settings & Profile State
@@ -3140,6 +3154,9 @@ export const App: React.FC<AppProps> = ({ user, initialUserData, onApplyTheme })
           userSkyvernKey={userSkyvernKey}
           onSaveFirecrawlKey={(k: string) => saveServiceKey('userFirecrawlKey', k)}
           onSaveSkyvernKey={(k: string) => saveServiceKey('userSkyvernKey', k)}
+          userOpenRouterKey={userOpenRouterKey}
+          userOpenRouterModel={userOpenRouterModel}
+          onSaveOpenRouter={saveOpenRouter}
           onOpenArchived={() => { setIsSettingsModalOpen(false); setIsArchivedModalOpen(true); }}
           onOpenFocoFlow={() => { setIsSettingsModalOpen(false); setIsFocoFlowModalOpen(true); }}
       />
