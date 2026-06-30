@@ -53,7 +53,10 @@ const InternalBrowser = ({
   const chatEndRef = useRef<HTMLDivElement>(null);
   // Digitação direta fluida: fila para preservar a ordem das teclas + screenshot com debounce.
   const keyQueueRef = useRef<Promise<any>>(Promise.resolve());
-  const shotDebounceRef = useRef<number | null>(null);
+  // Buffer de digitação: agrupa caracteres numa rajada e envia em UMA requisição
+  // (cada tecla isolada seria uma ida-e-volta de rede -> digitação lenta/com lag).
+  const typeBufferRef = useRef<string>('');
+  const flushTimerRef = useRef<number | null>(null);
   // Captura de teclado confiável: um textarea invisível sobre a tela mantém o foco
   // (diferente do <img>, que perde foco quando o screenshot atualiza).
   const kbRef = useRef<HTMLTextAreaElement>(null);
@@ -174,28 +177,32 @@ const InternalBrowser = ({
     if (px < 0 || py < 0 || px > renderedW || py > renderedH) return;
     const x = Math.round((px / renderedW) * RPA_VIEWPORT.width);
     const y = Math.round((py / renderedH) * RPA_VIEWPORT.height);
+    // Envia o que estiver no buffer ANTES de mudar o foco (senão letras sobram e caem
+    // no próximo campo) e encadeia o clique na fila para preservar a ordem.
+    flushTyping();
     setServerBusy(true);
-    try {
-      applyResult(await rpaClient.clickAt(x, y));
-    } finally {
-      setServerBusy(false);
-    }
+    keyQueueRef.current = keyQueueRef.current
+      .then(() => rpaClient.clickAt(x, y))
+      .then((res) => applyResult(res))
+      .catch(() => { /* ignore */ })
+      .finally(() => setServerBusy(false));
   };
 
-  // Atualiza a tela ~250ms após a última tecla (evita travar a cada caractere).
-  const refreshShotDebounced = () => {
-    if (shotDebounceRef.current) window.clearTimeout(shotDebounceRef.current);
-    shotDebounceRef.current = window.setTimeout(async () => {
-      try {
-        const res = await rpaClient.screenshot();
-        if (res.ok && res.screenshot) setShot(res.screenshot);
-      } catch { /* ignore */ }
-    }, 250);
+  // Esvazia o buffer de teclas: manda a rajada acumulada como UMA requisição /type.
+  const flushTyping = () => {
+    if (flushTimerRef.current) { window.clearTimeout(flushTimerRef.current); flushTimerRef.current = null; }
+    const text = typeBufferRef.current;
+    typeBufferRef.current = '';
+    if (!text) return;
+    keyQueueRef.current = keyQueueRef.current
+      .then(() => rpaClient.type(text))
+      .then((res) => { if (res?.ok && res.screenshot) setShot(res.screenshot); })
+      .catch(() => { /* ignore */ });
   };
 
-  // Encaminha digitação do usuário (com foco na imagem) para o foco atual do Chromium.
-  // As teclas são enfileiradas (mantém a ordem) e enviadas sem bloquear a UI; a tela
-  // é re-capturada com debounce. Resultado: digitação direta fluida, sem lag por tecla.
+  // Encaminha digitação do usuário (com foco no textarea sobreposto) para o foco atual
+  // do Chromium. Caracteres normais vão para um buffer e são enviados em rajada (1 req
+  // por pausa de ~80ms); teclas especiais esvaziam o buffer antes, preservando a ordem.
   const handleImageKeyDown = (e: React.KeyboardEvent) => {
     if (rpaMode !== 'server') return;
     const special: Record<string, string> = {
@@ -205,10 +212,17 @@ const InternalBrowser = ({
     const isSpecial = e.key in special;
     if (!isSpecial && e.key.length !== 1) return; // ignora modificadores isolados (Shift, Ctrl...)
     e.preventDefault();
-    keyQueueRef.current = keyQueueRef.current
-      .then(() => (isSpecial ? rpaClient.pressKey(special[e.key]) : rpaClient.type(e.key)))
-      .catch(() => { /* ignore */ });
-    refreshShotDebounced();
+    if (isSpecial) {
+      flushTyping(); // garante a ordem: rajada acumulada antes da tecla especial
+      keyQueueRef.current = keyQueueRef.current
+        .then(() => rpaClient.pressKey(special[e.key]))
+        .then((res) => { if (res?.ok && res.screenshot) setShot(res.screenshot); })
+        .catch(() => { /* ignore */ });
+      return;
+    }
+    typeBufferRef.current += e.key;
+    if (flushTimerRef.current) window.clearTimeout(flushTimerRef.current);
+    flushTimerRef.current = window.setTimeout(flushTyping, 80);
   };
 
   // Handle drawing on canvas from agent/rpa
