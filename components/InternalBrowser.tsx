@@ -21,18 +21,25 @@ interface InternalBrowserProps {
   isVisionActive?: boolean;
   onToggleVision?: () => void;
   isAiInspecting?: boolean;
+  // Interação Manual: quando ligada, o usuário assume o controle do navegador e o
+  // agente fica pausado (não executa ações). Controlado pelo App (estado compartilhado
+  // porque é o agente, no App, que precisa respeitar a pausa).
+  manualMode?: boolean;
+  onToggleManualMode?: () => void;
 }
 
-const InternalBrowser = ({ 
-  isOpen, 
-  onClose, 
-  onMicClick, 
+const InternalBrowser = ({
+  isOpen,
+  onClose,
+  onMicClick,
   isMicActive,
   messages = [],
   onSendMessage,
   isVisionActive,
   onToggleVision,
-  isAiInspecting
+  isAiInspecting,
+  manualMode = false,
+  onToggleManualMode
 }: InternalBrowserProps) => {
   const [url, setUrl] = useState('https://dev.hospitalarsaude.app.br/#/dashboard/home');
   const [inputUrl, setInputUrl] = useState(url);
@@ -57,6 +64,9 @@ const InternalBrowser = ({
   // (cada tecla isolada seria uma ida-e-volta de rede -> digitação lenta/com lag).
   const typeBufferRef = useRef<string>('');
   const flushTimerRef = useRef<number | null>(null);
+  // Enquanto o usuário está com o foco no teclado (digitando), pausamos o polling de
+  // screenshot para não re-renderizar e roubar o foco no meio da digitação.
+  const kbFocusedRef = useRef<boolean>(false);
   // Captura de teclado confiável: um textarea invisível sobre a tela mantém o foco
   // (diferente do <img>, que perde foco quando o screenshot atualiza).
   const kbRef = useRef<HTMLTextAreaElement>(null);
@@ -126,7 +136,9 @@ const InternalBrowser = ({
   useEffect(() => {
     if (rpaMode !== 'server' || !isOpen) return;
     const t = setInterval(async () => {
-      if (serverBusy) return;
+      // Não atualiza enquanto ocupado ou enquanto o usuário está digitando (evita
+      // re-render que tiraria o foco do teclado no meio da digitação).
+      if (serverBusy || kbFocusedRef.current) return;
       const res = await rpaClient.screenshot();
       if (res.ok && res.screenshot) setShot(res.screenshot);
     }, 2000);
@@ -209,6 +221,19 @@ const InternalBrowser = ({
       Enter: 'Enter', Backspace: 'Backspace', Tab: 'Tab', Escape: 'Escape',
       ArrowUp: 'ArrowUp', ArrowDown: 'ArrowDown', ArrowLeft: 'ArrowLeft', ArrowRight: 'ArrowRight', Delete: 'Delete',
     };
+    // Atalhos com Ctrl/Cmd (selecionar tudo, copiar, colar, recortar, desfazer): repassa
+    // como combo para o Chromium. O servidor é Linux -> usa sempre Control+<tecla>.
+    // Sem isto, Ctrl+A digitava "a" e era impossível selecionar/limpar o campo.
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && /^[a-z]$/i.test(e.key)) {
+      e.preventDefault();
+      flushTyping();
+      const combo = `Control+${e.key.toLowerCase()}`;
+      keyQueueRef.current = keyQueueRef.current
+        .then(() => rpaClient.pressKey(combo))
+        .then((res) => { if (res?.ok && res.screenshot) setShot(res.screenshot); })
+        .catch(() => { /* ignore */ });
+      return;
+    }
     const isSpecial = e.key in special;
     if (!isSpecial && e.key.length !== 1) return; // ignora modificadores isolados (Shift, Ctrl...)
     e.preventDefault();
@@ -421,17 +446,21 @@ const InternalBrowser = ({
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
           </button>
 
-          {/* Modo server (Playwright): a interação está SEMPRE ativa (textarea sobreposto
-              captura clique+teclado). Mostra um indicador estático para o usuário saber que
-              pode clicar e digitar direto. O toggle só existe no modo iframe local, onde ele
-              de fato liga/desliga a camada de cliques. */}
+          {/* Modo server (Playwright): toggle de INTERAÇÃO MANUAL. A digitação/clique do
+              usuário funciona sempre; este botão controla o "revezamento": quando LIGADO,
+              o usuário assume o controle e o AGENTE fica pausado (não executa ações). Ao
+              desligar, o agente retoma do estado atual (mesma sessão, nada se perde). */}
           {rpaMode === 'server' && (
-            <div
-              title="Interação ativa — clique e digite direto na tela"
-              className="p-2 rounded-lg bg-[#4CAF50]/20 text-[#4CAF50] flex items-center"
+            <button
+              onClick={() => onToggleManualMode?.()}
+              className={`px-2 py-1.5 rounded-lg transition-all flex items-center gap-1.5 text-xs font-bold ${manualMode ? 'bg-[#4CAF50] text-white shadow-[0_0_15px_rgba(76,175,80,0.5)]' : 'hover:bg-[#333] text-gray-300 border border-[#444]'}`}
+              title={manualMode
+                ? 'Interação Manual ATIVA — você no controle, agente pausado. Clique para devolver ao agente.'
+                : 'Clique para assumir o controle (Interação Manual) e pausar o agente.'}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5" /></svg>
-            </div>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5" /></svg>
+              {manualMode ? 'Manual ✓' : 'Manual'}
+            </button>
           )}
           {rpaMode === 'iframe' && (
             <button
@@ -555,6 +584,8 @@ const InternalBrowser = ({
                 onClick={handleImageClick}
                 onKeyDown={handleImageKeyDown}
                 onChange={() => { /* texto vai pro navegador via onKeyDown; nada acumula aqui */ }}
+                onFocus={() => { kbFocusedRef.current = true; }}
+                onBlur={() => { kbFocusedRef.current = false; }}
                 onWheel={(e) => { void rpaClient.scroll(e.deltaY).then(applyResult); }}
                 value=""
                 aria-label="Área de interação do navegador — clique para focar e digite"
@@ -573,6 +604,12 @@ const InternalBrowser = ({
               title="Internal Browser Content"
               sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-pointer-lock allow-presentation"
             />
+          )}
+
+          {rpaMode === 'server' && manualMode && (
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 bg-[#4CAF50] text-white text-[11px] font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5 pointer-events-none">
+              ✋ Você está no controle — agente pausado
+            </div>
           )}
 
           {rpaMode === 'server' && serverBusy && (

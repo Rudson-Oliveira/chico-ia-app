@@ -311,7 +311,16 @@ export const App: React.FC<AppProps> = ({ user, initialUserData, onApplyTheme })
     }
   };
 
+  // Interação Manual: quando ligada, o usuário assume o controle do navegador e o agente
+  // fica pausado (não executa ações de navegação/clique/digitação). Ao desligar, o agente
+  // retoma do estado atual (mesma sessão Playwright — nada se perde).
+  const [manualBrowserMode, setManualBrowserMode] = useState(false);
+
   const handleRpaCommand = async (command: string, args: any) => {
+    // Em modo manual, o agente não age no navegador (exceto abrir/fechar o painel).
+    if (manualBrowserMode && command !== 'openBrowser' && command !== 'closeBrowser') {
+      return { success: false, message: "Interação Manual está ativa: o usuário está no controle do navegador. Aguarde ele desativar o modo manual para você continuar." };
+    }
     try {
       switch (command) {
         case 'openBrowser':
@@ -3177,6 +3186,8 @@ export const App: React.FC<AppProps> = ({ user, initialUserData, onApplyTheme })
           isVisionActive={isScreenSharing}
           onToggleVision={() => setIsScreenSharing(!isScreenSharing)}
           isAiInspecting={isAiInspecting}
+          manualMode={manualBrowserMode}
+          onToggleManualMode={() => setManualBrowserMode(v => !v)}
        />
 
     </div>
