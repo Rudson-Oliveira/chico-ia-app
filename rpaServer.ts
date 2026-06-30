@@ -105,8 +105,10 @@ function isHttpUrl(u: string): boolean {
   }
 }
 
+// JPEG (qualidade ~60) em vez de PNG: ~5-10x menor e mais rápido de codificar/transferir.
+// É o que mais reduz a latência percebida (a tela ao vivo / digitação atualiza muito mais rápido).
 async function screenshotBase64(page: AnyPage, fullPage = false): Promise<string> {
-  const buf: Buffer = await page.screenshot({ type: 'png', fullPage });
+  const buf: Buffer = await page.screenshot({ type: 'jpeg', quality: 60, fullPage });
   return buf.toString('base64');
 }
 
@@ -206,12 +208,12 @@ export function mountRpaRoutes(app: Express) {
       if (typeof selector === 'string' && selector) {
         if (clear) await page.fill(selector, '');
         await page.click(selector, { timeout: NAV_TIMEOUT_MS });
-        await page.type(selector, value, { delay: 20 });
+        await page.type(selector, value, { delay: 0 });
       } else {
-        // digita no elemento atualmente focado
-        await page.keyboard.type(value, { delay: 20 });
+        // digita no elemento atualmente focado (delay 0 = mais rápido)
+        await page.keyboard.type(value, { delay: 0 });
       }
-      await page.waitForTimeout(200);
+      await page.waitForTimeout(40);
       const screenshot = await screenshotBase64(page);
       res.json({ ok: true, url: page.url(), screenshot });
     } catch (e: any) {
@@ -225,7 +227,7 @@ export function mountRpaRoutes(app: Express) {
     try {
       const { page } = await getSession(visitorIdOf(req));
       await page.keyboard.press(key);
-      await page.waitForTimeout(300);
+      await page.waitForTimeout(120);
       const screenshot = await screenshotBase64(page);
       res.json({ ok: true, url: page.url(), screenshot });
     } catch (e: any) {

@@ -572,7 +572,7 @@ const InternalBrowser = ({
             <>
               <img
                 ref={imgRef}
-                src={shot ? `data:image/png;base64,${shot}` : undefined}
+                src={shot ? `data:image/jpeg;base64,${shot}` : undefined}
                 alt="Navegador (server-side)"
                 className="w-full h-full object-contain bg-white select-none pointer-events-none"
                 draggable={false}
