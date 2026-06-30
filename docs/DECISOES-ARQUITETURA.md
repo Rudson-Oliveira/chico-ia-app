@@ -49,6 +49,18 @@ Registro das decisões tomadas (e o porquê), para não serem revertidas por eng
   `/api` e `/proxy`, `skipWaiting` + `clients.claim`, limpa caches antigos (cache `v2`).
   Motivo: o SW antigo era cache-first em tudo (servia index.html velho → usuário preso em versão antiga).
 
+## 4d. Interação Manual (revezamento humano ↔ agente)
+- O navegador server-side é **uma única sessão compartilhada** entre humano e agente — nunca
+  "pausa"; o estado (login, página, campos) persiste continuamente.
+- Toggle **"Manual"** (barra do navegador, modo server): LIGADO → o humano assume o controle e o
+  AGENTE fica pausado (`handleRpaCommand` no App bloqueia ações ≠ open/closeBrowser e devolve uma
+  mensagem para o agente aguardar). DESLIGADO → o agente retoma do estado atual. Banner
+  "✋ Você está no controle — agente pausado". Estado vive no App (`manualBrowserMode`) porque é o
+  agente, no App, que precisa respeitar a pausa.
+- **Teclado:** Ctrl/Cmd+letra são repassados como combo `Control+<letra>` ao Chromium (selecionar
+  tudo/copiar/colar/recortar/desfazer) — antes Ctrl+A digitava "a" e era impossível limpar o campo.
+  O polling de screenshot pausa enquanto o textarea está focado (não rouba o foco ao digitar devagar).
+
 ## 6b. OpenRouter como economia/fallback de LLM (texto)
 - Os modelos do Chico já são todos **Flash/Flash-Lite** (os mais baratos do Gemini) — não há
   Pro a "rebaixar". O custo real em escala é a **voz (Live API)**, não o texto.
