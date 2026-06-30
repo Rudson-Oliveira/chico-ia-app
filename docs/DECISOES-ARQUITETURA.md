@@ -26,7 +26,15 @@ Registro das decisões tomadas (e o porquê), para não serem revertidas por eng
 - O navegador interno em modo server mostra um **screenshot ao vivo**; humano e agente atuam na
   **mesma sessão** Playwright. Para o humano digitar de forma confiável, há um **textarea invisível**
   sobreposto que captura clique e teclado (o `<img>` não segura foco entre atualizações).
-- Teclas são enfileiradas (ordem preservada) e o screenshot é re-capturado com debounce (~250ms).
+- **Mapeamento de clique considera o letterbox:** o `<img>` usa `object-contain`, que deixa bordas
+  quando o container tem proporção ≠ 1280×800. `handleImageClick` calcula a área renderizada real e
+  o offset antes de converter para coordenadas do Chromium — senão o clique cai errado, o campo não
+  foca e digitar não funciona (bug real corrigido em produção).
+- **Digitação em lote:** cada tecla seria uma ida-e-volta de rede até o host (RPA no Railway/EUA) →
+  lento e com letras "sobrando" na fila ao trocar de campo. Caracteres normais são acumulados num
+  buffer e enviados em UMA requisição `/type` por rajada (~80ms); teclas especiais e cliques esvaziam
+  o buffer antes (ordem preservada) e o clique também entra na fila. Resultado: digitação fluida.
+  Nota de locality: rodar o RPA **localmente** (mesma rede) torna a digitação instantânea.
 - O **agente NÃO preenche senhas** — o humano preenche direto (segurança). Removida uma "barra de
   preenchimento" que usava campo `type=password` e disparava o autofill do navegador (vazava credenciais).
 
