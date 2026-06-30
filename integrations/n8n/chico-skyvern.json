@@ -1,0 +1,71 @@
+{
+  "name": "Chico · Skyvern (plano B)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chico-skyvern",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "sk-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "chico-skyvern"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Recebe { prompt, url?, max_steps? } no body do webhook.\nconst b = ($json.body) || $json || {};\nconst payload = { prompt: b.prompt, max_steps: b.max_steps || 10 };\nif (b.url) payload.url = b.url;\nreturn [{ json: { payload } }];"
+      },
+      "id": "sk-build",
+      "name": "Montar tarefa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.skyvern.com/v1/run/tasks",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {}
+      },
+      "id": "sk-http",
+      "name": "Skyvern API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Skyvern API (x-api-key)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "sk-respond",
+      "name": "Responder",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Montar tarefa", "type": "main", "index": 0 }]] },
+    "Montar tarefa": { "main": [[{ "node": "Skyvern API", "type": "main", "index": 0 }]] },
+    "Skyvern API": { "main": [[{ "node": "Responder", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false
+}

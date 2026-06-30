@@ -1,0 +1,71 @@
+{
+  "name": "Chico · Firecrawl (plano B)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chico-firecrawl",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "fc-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "chico-firecrawl"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Recebe { action: 'search'|'scrape', query?, url?, limit? } no body do webhook.\nconst b = ($json.body) || $json || {};\nconst action = String(b.action || 'search').toLowerCase();\nif (action === 'scrape') {\n  return [{ json: { endpoint: 'https://api.firecrawl.dev/v1/scrape', payload: { url: b.url, formats: ['markdown'] } } }];\n}\nreturn [{ json: { endpoint: 'https://api.firecrawl.dev/v1/search', payload: { query: b.query, limit: b.limit || 5 } } }];"
+      },
+      "id": "fc-route",
+      "name": "Montar requisição",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.endpoint }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {}
+      },
+      "id": "fc-http",
+      "name": "Firecrawl API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Firecrawl API (Authorization: Bearer fc-...)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "fc-respond",
+      "name": "Responder",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Montar requisição", "type": "main", "index": 0 }]] },
+    "Montar requisição": { "main": [[{ "node": "Firecrawl API", "type": "main", "index": 0 }]] },
+    "Firecrawl API": { "main": [[{ "node": "Responder", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false
+}
