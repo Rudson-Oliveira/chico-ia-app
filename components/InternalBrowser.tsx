@@ -148,14 +148,32 @@ const InternalBrowser = ({
   };
 
   // Converte coordenadas do clique (na sobreposição) para o viewport do Chromium.
+  // A imagem usa object-contain (letterbox): a área renderizada do screenshot pode ser
+  // menor que o container (com bordas). Sem considerar isso, o clique cai numa posição
+  // errada na página e o campo não é focado (então digitar não funciona). Aqui calculamos
+  // a área real renderizada e mapeamos o clique corretamente.
   const handleImageClick = async (e: React.MouseEvent<HTMLElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const sx = RPA_VIEWPORT.width / rect.width;
-    const sy = RPA_VIEWPORT.height / rect.height;
-    const x = Math.round((e.clientX - rect.left) * sx);
-    const y = Math.round((e.clientY - rect.top) * sy);
-    // Mantém o teclado capturado para que o usuário possa digitar logo após clicar.
+    const ar = RPA_VIEWPORT.width / RPA_VIEWPORT.height; // 1280/800
+    const cAr = rect.width / rect.height;
+    let renderedW = rect.width, renderedH = rect.height, offX = 0, offY = 0;
+    if (cAr > ar) {
+      // container mais largo -> bordas laterais
+      renderedW = rect.height * ar;
+      offX = (rect.width - renderedW) / 2;
+    } else {
+      // container mais alto -> bordas em cima/baixo
+      renderedH = rect.width / ar;
+      offY = (rect.height - renderedH) / 2;
+    }
+    const px = e.clientX - rect.left - offX;
+    const py = e.clientY - rect.top - offY;
+    // Mantém o teclado capturado para digitar logo após clicar.
     kbRef.current?.focus();
+    // Clique nas bordas (fora da imagem) é ignorado.
+    if (px < 0 || py < 0 || px > renderedW || py > renderedH) return;
+    const x = Math.round((px / renderedW) * RPA_VIEWPORT.width);
+    const y = Math.round((py / renderedH) * RPA_VIEWPORT.height);
     setServerBusy(true);
     try {
       applyResult(await rpaClient.clickAt(x, y));
